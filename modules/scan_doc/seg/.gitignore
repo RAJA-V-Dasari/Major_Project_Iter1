@@ -1,0 +1,22 @@
+# Local environment (Python 3.11 venv, ~1.8G)
+.venv/
+
+# Derived artifacts - all regenerable by rerunning the detectors.
+# The small JSONs are deliberately NOT ignored: they are the handoff
+# between this module, CVAT, and Module 2.
+output/crops/
+output/annotated/
+output/lines_annotated/
+output/nontext_annotated/
+
+# Training runs and the CVAT-exported dataset
+runs/
+dataset/
+
+# Model weights are large; download or train them rather than commit.
+# NOTE: models/doclayout_yolo_docstructbench_imgsz1024.pt (39M) is
+# already tracked from an earlier commit - see README.
+*.pt
+!models/doclayout_yolo_docstructbench_imgsz1024.pt
+
+__pycache__/

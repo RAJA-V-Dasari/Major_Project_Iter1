@@ -1,0 +1,57 @@
+# Trim CVAT for a single annotator on a small machine.
+#
+# Use this only if the stock `docker compose up -d` thrashes. CVAT asks
+# for 8 GB and this host has 7 GB total, so the stock stack may well be
+# fine - try it first and keep the simpler setup if it works.
+#
+# What this changes:
+#
+#   CVAT_ANALYTICS: 0   the server stops shipping events, which makes
+#                       clickhouse, vector and grafana dead weight -
+#                       roughly 1.5 GB of the stack. Nothing in the
+#                       annotation workflow reads them.
+#
+#   NUMPROCS: 1         the stock file runs 2 processes for the server
+#                       and several workers. One annotator does not
+#                       generate the queue depth that pays for.
+#
+# The analytics containers are not deleted here - a compose override
+# cannot remove a service, and every backend service lists clickhouse
+# under depends_on. They are skipped at start time instead, with
+# --no-deps; see cvat/README in the annotation docs for the exact
+# command.
+#
+# Place next to CVAT's own docker-compose.yml, or pass explicitly:
+#   docker compose -f docker-compose.yml -f /path/to/this up -d ...
+
+services:
+
+  cvat_server:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1
+
+  cvat_worker_import:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1
+
+  cvat_worker_export:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1
+
+  cvat_worker_annotation:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1
+
+  cvat_worker_chunks:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1
+
+  cvat_worker_utils:
+    environment:
+      CVAT_ANALYTICS: 0
+      NUMPROCS: 1

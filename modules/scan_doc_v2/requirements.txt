@@ -1,0 +1,7 @@
+# Classical computer-vision pipeline - no ML framework needed.
+# Standard Python (3.11+, including the system's 3.14) works fine here;
+# unlike modules/scan_doc/seg, there is no torch/transformers dependency
+# forcing an older interpreter.
+
+opencv-python
+numpy

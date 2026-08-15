@@ -1,0 +1,736 @@
+{
+  "s18_c1_p09.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph"
+  },
+
+  "s17_c2_p08.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "figure",
+    "5": "code",
+    "6": "code"
+  },
+
+  "s16_c1_p07.png": "skip",
+
+  "s32_c2_p05.png": {
+    "1": "paragraph",
+    "2+3+4": "table"
+  },
+
+  "s01_c1_p06.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "paragraph",
+    "6": "paragraph"
+  },
+
+  "s02_c1_p08.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "figure"
+  },
+
+  "s05_c3_p02.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "figure",
+    "5": "paragraph",
+    "6": "paragraph",
+    "7+8": "figure"
+  },
+
+  "s17_c3_p08.png": {
+    "1": "paragraph",
+    "2+3+4": "figure",
+    "5": "paragraph",
+    "6+7": "figure",
+    "8": "paragraph",
+    "9": "paragraph"
+  },
+
+  "s03_c1_p03.png": {
+    "1": "code",
+    "2": "drop",
+    "3": "code",
+    "4": "code",
+    "5": "paragraph"
+  },
+
+  "s34_c2_p06.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "figure",
+    "4": "table"
+  },
+
+  "s20_c1_p03.png": {
+    "1": "paragraph",
+    "2+3": "figure"
+  },
+
+  "s54_c1_p02.png": {
+    "1": "paragraph"
+  },
+
+  "s04_c1_p08.png": {
+    "1+2": "figure",
+    "3": "paragraph"
+  },
+
+  "s04_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s04_c3_p08.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "drop"
+  },
+
+  "s08_c1_p11.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph"
+  },
+
+  "s01_c3_p08.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "math",
+    "4": "math"
+  },
+
+  "s02_c3_p09.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "math"
+  },
+
+  "s03_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s03_c3_p06.png": {
+    "1": "math",
+    "2": "math",
+    "3": "paragraph",
+    "4": "math"
+  },
+
+  "s05_c1_p02.png": {
+    "1": "paragraph",
+    "2": ["paragraph", "crossed_out"],
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph",
+    "6": "paragraph",
+    "7": "drop"
+  },
+
+  "s06_c1_p06.png": {
+    "1": "paragraph",
+    "2": "drop"
+  },
+
+  "s06_c2_p04.png": "skip",
+
+  "s07_c2_p03.png": {
+    "1": "paragraph"
+  },
+
+  "s07_c2_p06.png": {
+    "1": "math",
+    "2": "math",
+    "3": "drop"
+  },
+
+  "s08_c1_p01.png": {
+    "1": "drop",
+    "2+3+4+5+6": "table"
+  },
+
+  "s08_c3_p02.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "math",
+    "5": "drop"
+  },
+
+  "s09_c1_p07.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph"
+  },
+
+  "s09_c3_p04.png": {
+    "1": "paragraph",
+    "2": "figure",
+    "3": "paragraph",
+    "4": "drop"
+  },
+
+  "s10_c3_p09.png": {
+    "1": "math"
+  },
+
+  "s10_c3_p12.png": "skip",
+
+  "s11_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s11_c2_p02.png": "skip",
+
+  "s11_c3_p06.png": "skip",
+
+  "s12_c1_p04.png": {
+    "1": "figure",
+    "2": "paragraph",
+    "3": "paragraph"
+  },
+
+  "s12_c2_p05.png": {
+    "1": "figure",
+    "2": "table",
+    "3": "math",
+    "4": "paragraph",
+    "5": "drop"
+  },
+
+  "s13_c1_p05.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math",
+    "4": "paragraph",
+    "5": "math",
+    "6": "paragraph",
+    "7": "math",
+    "8": "math",
+    "9": "paragraph"
+  },
+
+  "s13_c2_p03.png": {
+    "1": "math",
+    "2": "math",
+    "3": "math"
+  },
+
+  "s13_c3_p01.png": {
+    "1": "table",
+    "2+3": "table"
+  },
+
+  "s14_c2_p06.png": {
+    "1": "math",
+    "2": "drop"
+  },
+
+  "s14_c3_p08.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "figure"
+  },
+
+  "s15_c1_p09.png": {
+    "1": "paragraph",
+    "2": "drop"
+  },
+
+  "s15_c2_p01.png": {
+    "1": "table",
+    "2+3+4+5+6": "table"
+  },
+
+  "s15_c3_p04.png": {
+    "1": "math",
+    "2": "math",
+    "3": "paragraph"
+  },
+
+  "s16_c1_p05.png": {
+    "1": "figure",
+    "2": "paragraph"
+  },
+
+  "s24_c2_p04.png": "skip",
+
+  "s27_c2_p07.png": "skip",
+
+  "s55_c1_p07.png": {
+    "1": "math", "2": "math"
+  },
+
+  "s56_c3_p02.png": {
+    "1": "paragraph", "2": "paragraph"
+  },
+
+  "s57_c1_p03.png": {
+    "1+2": "figure",
+    "3": "paragraph",
+    "4": "paragraph"
+  },
+
+  "s58_c3_p03.png": {
+    "1": "paragraph", "2": "paragraph", "3": "drop"
+  },
+
+  "s59_c2_p05.png": {
+    "1": "math", "2": "math"
+  },
+
+  "s60_c1_p06.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph", "4": "paragraph"
+  },
+
+  "s61_c3_p04.png": {
+    "1": "paragraph", "2": "figure", "3": "paragraph", "4": "paragraph"
+  },
+
+  "s49_c3_p06.png": {
+    "1+2": "figure",
+    "3": "figure"
+  },
+
+  "s50_c2_p01.png": {
+    "1": "table",
+    "2+3+4": "table"
+  },
+
+  "s50_c3_p09.png": {
+    "1": "math"
+  },
+
+  "s51_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s51_c2_p07.png": {
+    "1": "math", "2": "math", "3": "math",
+    "4": "math", "5": "math", "6": "math"
+  },
+
+  "s52_c2_p02.png": {
+    "1": "paragraph", "2": "math", "3": "paragraph", "4": "paragraph"
+  },
+
+  "s53_c1_p12.png": {
+    "1+2": "figure",
+    "3": "paragraph"
+  },
+
+  "s44_c2_p05.png": {
+    "1": "math", "2": "math", "3": "math", "4": "math", "5": "math"
+  },
+
+  "s45_c1_p02.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph",
+    "4": "paragraph", "5": "paragraph", "6": "paragraph", "7": "paragraph"
+  },
+
+  "s46_c2_p03.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph",
+    "4": "paragraph", "5": "paragraph"
+  },
+
+  "s47_c1_p05.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph", "4": "paragraph"
+  },
+
+  "s48_c3_p03.png": {
+    "1+2": "figure",
+    "3": "paragraph"
+  },
+
+  "s49_c3_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6+7+8": "table"
+  },
+
+  "s42_c1_p05.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph",
+    "4": "paragraph", "5": "paragraph", "6": "paragraph",
+    "7": "paragraph", "8": "paragraph", "9": "paragraph"
+  },
+
+  "s42_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s42_c2_p05.png": {
+    "1": "math", "2": "math", "3": "math", "4": "math", "5": "math",
+    "6": "math", "7": "math", "8": "math", "9": "math", "10": "math"
+  },
+
+  "s43_c2_p02.png": {
+    "1": "paragraph", "2": "paragraph", "3": "paragraph",
+    "4": "math", "5": "paragraph", "6": "math",
+    "7": "paragraph", "8": "math", "9": "paragraph"
+  },
+
+  "s43_c3_p08.png": {
+    "1": "math",
+    "2": "math",
+    "3+4": "figure",
+    "5": "figure"
+  },
+
+  "s44_c2_p04.png": {
+    "1": "math", "2": "math", "3": "math", "4": "math", "5": "math"
+  },
+
+  "s39_c1_p04.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph"
+  },
+
+  "s39_c3_p06.png": {
+    "1": "paragraph",
+    "2": "paragraph"
+  },
+
+  "s40_c2_p06.png": {
+    "1": "math",
+    "2": "paragraph"
+  },
+
+  "s40_c3_p04.png": {
+    "1": "figure",
+    "2": "paragraph",
+    "3": "paragraph"
+  },
+
+  "s41_c1_p02.png": {
+    "1": "code",
+    "2": "math",
+    "3": "math",
+    "4": "paragraph",
+    "5": "math"
+  },
+
+  "s41_c2_p09.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "math",
+    "6": "math",
+    "7": "math",
+    "8": "math",
+    "9": "math",
+    "10": "drop"
+  },
+
+  "s36_c2_p05.png": {
+    "1": "paragraph"
+  },
+
+  "s36_c3_p03.png": {
+    "1": "math"
+  },
+
+  "s37_c2_p06.png": {
+    "1": "math"
+  },
+
+  "s37_c3_p07.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "math",
+    "4": "paragraph"
+  },
+
+  "s38_c2_p05.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "math"
+  },
+
+  "s38_c3_p04.png": {
+    "1+2+3": "figure",
+    "4": "paragraph",
+    "5": "paragraph"
+  },
+
+  "s33_c1_p04.png": {
+    "1": "paragraph",
+    "2": "figure",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph",
+    "6": "figure"
+  },
+
+  "s33_c2_p10.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "drop"
+  },
+
+  "s34_c3_p01.png": {
+    "1": "table",
+    "2+3+4+5": "table"
+  },
+
+  "s34_c3_p06.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3+4": "figure"
+  },
+
+  "s35_c3_p02.png": "skip",
+
+  "s35_c3_p09.png": {
+    "1": "paragraph"
+  },
+
+  "s29_c3_p08.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "math",
+    "5": "paragraph",
+    "6": "math",
+    "7": "paragraph",
+    "8": "math",
+    "9": "math"
+  },
+
+  "s30_c2_p08.png": {
+    "1": "math",
+    "2": "math",
+    "3": "drop",
+    "4": "drop"
+  },
+
+  "s30_c3_p05.png": {
+    "1": "math",
+    "2": "drop"
+  },
+
+  "s31_c3_p02.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "math",
+    "4": "math",
+    "5": "paragraph",
+    "6": "paragraph",
+    "7": "paragraph",
+    "8": "drop"
+  },
+
+  "s31_c3_p09.png": {
+    "1": "math",
+    "2": "math",
+    "3": "paragraph"
+  },
+
+  "s32_c2_p07.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math"
+  },
+
+  "s27_c3_p08.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "paragraph",
+    "4": "paragraph"
+  },
+
+  "s28_c1_p03.png": {
+    "1": "code",
+    "2": "code",
+    "3": "paragraph"
+  },
+
+  "s28_c2_p01.png": {
+    "1": "table",
+    "2+3+4": "table"
+  },
+
+  "s28_c2_p09.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph",
+    "6": "paragraph",
+    "7": "drop"
+  },
+
+  "s29_c2_p12.png": {
+    "1": "table"
+  },
+
+  "s25_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s25_c2_p06.png": {
+    "1": "paragraph",
+    "2": "table",
+    "3": "paragraph",
+    "4": "math",
+    "5": "math",
+    "6": "math",
+    "7": "drop"
+  },
+
+  "s25_c2_p07.png": {
+    "1": "drop"
+  },
+
+  "s26_c1_p08.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "math",
+    "5": "math",
+    "6": "paragraph",
+    "7": "paragraph",
+    "8": "math",
+    "9": "math",
+    "10": "paragraph",
+    "11": "paragraph",
+    "12": "math",
+    "13": "math"
+  },
+
+  "s26_c2_p04.png": {
+    "1": "table",
+    "2": "table",
+    "3": "table",
+    "4": "drop"
+  },
+
+  "s22_c1_p04.png": {
+    "1": "paragraph"
+  },
+
+  "s22_c2_p04.png": {
+    "1": "math",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "paragraph"
+  },
+
+  "s23_c1_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6+7": "table"
+  },
+
+  "s23_c2_p02.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "paragraph",
+    "4": "math",
+    "5": "math",
+    "6": "math",
+    "7": "paragraph",
+    "8": "math",
+    "9": "paragraph"
+  },
+
+  "s23_c2_p07.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph"
+  },
+
+  "s24_c2_p03.png": {
+    "1": "math",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "math",
+    "6": "math",
+    "7": "math"
+  },
+
+  "s19_c2_p01.png": {
+    "1": "drop",
+    "2": "table",
+    "3+4+5+6": "table"
+  },
+
+  "s19_c2_p14.png": {
+    "1": "math",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "drop"
+  },
+
+  "s19_c3_p05.png": {
+    "1": "paragraph",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "math",
+    "6": "math"
+  },
+
+  "s20_c2_p07.png": {
+    "1": "math",
+    "2": "math",
+    "3": "math",
+    "4": "math",
+    "5": "math"
+  },
+
+  "s21_c1_p02.png": {
+    "1": "paragraph",
+    "2": "code",
+    "3": "code"
+  },
+
+  "s21_c1_p08.png": {
+    "1+2+3": "table"
+  },
+
+  "s18_c3_p06.png": {
+    "1": "paragraph",
+    "2": "paragraph",
+    "3": "paragraph",
+    "4": "paragraph",
+    "5": "math",
+    "6": "paragraph",
+    "7": "math",
+    "8": "math"
+  }
+}

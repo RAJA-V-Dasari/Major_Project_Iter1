@@ -1,2 +1,37 @@
 venv/
+.venv/
 __pycache__/
+
+# Secrets - never commit the Hugging Face token
+.env
+
+# Student answer scripts contain personal data: names, USNs, signatures
+# and marks. The source dataset is a PRIVATE Hugging Face repo and the
+# converted copies must not enter git history either.
+preprocessing/output/
+preprocessing/.hf_cache/
+preprocessing/cleaned/
+preprocessing/clean_preview/
+preprocessing/students.csv
+
+# The annotation sample points at those same pages, and the review
+# sheets rendered from them are readable images of real answer scripts.
+# The manifest and the labels themselves are safe to track - they carry
+# geometry, not content - so they are deliberately NOT ignored.
+annotation/images/
+annotation/review/
+annotation/preannotations/
+annotation/dataset/
+annotation/runs/
+annotation/review_labels/
+annotation/cloud_upload/
+annotation/annotated/
+annotation/overnight.log
+
+# Ultralytics defaults here if a script forgets to set `project`
+runs/
+*.pt
+annotation/remap_check/
+annotation/images_cleaned/
+annotation/dataset_clean/
+annotation/segmented/
