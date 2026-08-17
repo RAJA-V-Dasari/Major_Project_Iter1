@@ -2,16 +2,24 @@ venv/
 .venv/
 __pycache__/
 
+# Archived pre-rebuild preprocessing/ (old cleaning pipeline + all its
+# data), kept on disk for reference only, not tracked.
+preprocessing_legacy/
+
 # Secrets - never commit the Hugging Face token
 .env
 
 # Student answer scripts contain personal data: names, USNs, signatures
 # and marks. The source dataset is a PRIVATE Hugging Face repo and the
 # converted copies must not enter git history either.
-preprocessing/output/
-preprocessing/.hf_cache/
-preprocessing/cleaned/
-preprocessing/clean_preview/
+#
+# preprocessing/ is now organised as numbered per-stage folders
+# (01_deskew/, 02_.../...), each with its own input/output/preview -
+# all of which hold real page images or point at them, so every stage
+# is covered by one glob rather than adding a line per stage.
+preprocessing/*/input/
+preprocessing/*/output/
+preprocessing/*/preview/
 preprocessing/students.csv
 
 # The annotation sample points at those same pages, and the review
@@ -36,7 +44,3 @@ annotation/images_cleaned/
 annotation/dataset_clean/
 annotation/segmented/
 annotation/seg_run.log
-preprocessing/cleaner/data/
-preprocessing/cleaner/runs/
-preprocessing/vectorised/
-preprocessing/cleaner/preview/
