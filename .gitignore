@@ -2,9 +2,14 @@ venv/
 .venv/
 __pycache__/
 
-# Archived pre-rebuild preprocessing/ (old cleaning pipeline + all its
-# data), kept on disk for reference only, not tracked.
-preprocessing_legacy/
+# Local copy of the UNCLEANED source dataset, pulled from the private
+# HF repo (prss-majorproject-37/Handwritten-AnswerScripts-MajorProject).
+# Real student pages - names, USNs, signatures, marks - so never
+# tracked. Re-fetch with:
+#   huggingface-cli download --repo-type dataset \
+#     prss-majorproject-37/Handwritten-AnswerScripts-MajorProject \
+#     --local-dir dataset
+dataset/
 
 # Secrets - never commit the Hugging Face token
 .env
