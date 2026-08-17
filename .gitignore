@@ -35,3 +35,8 @@ annotation/remap_check/
 annotation/images_cleaned/
 annotation/dataset_clean/
 annotation/segmented/
+annotation/seg_run.log
+preprocessing/cleaner/data/
+preprocessing/cleaner/runs/
+preprocessing/vectorised/
+preprocessing/cleaner/preview/

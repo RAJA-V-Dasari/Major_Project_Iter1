@@ -1,42 +1,55 @@
 """
-Segment every cleaned page: COCO JSON plus a colour-coded image.
+Locate content on every cleaned page: where it is, not what it is.
 
-Cover pages (`page_01`) are excluded - they hold the identity block,
-signatures and marks, not answer content.
+Emits a page -> block -> line hierarchy as JSON, plus flat CSV tables
+ready for relational storage, plus a rendered image per page.
 
-COVERAGE FIRST
---------------
-Each region goes on to OCR and then to document reconstruction, so a
-region that is never boxed is content that is silently lost. That is
-far worse than a region with the wrong class, which a later stage can
-still re-read. The trained model on its own does not clear that bar: on
-some pages it boxes almost nothing.
+WHY LOCALISATION ONLY
+---------------------
+Classifying a region (paragraph / maths / figure / ...) needs training
+data this corpus does not have - 27 figure, 10 code and 1 crossed_out
+examples - and a wrong class is a claim the pipeline then has to
+un-learn. Where the content sits is a far easier question and the one
+OCR actually needs answered.
 
-So geometry comes from the CLASSICAL segmenter (projection profiling,
-which finds ink wherever it sits) and the class from the model,
-matched to each block by overlap. Model boxes covering something the
-classical pass missed - usually diagrams, which have no ruled-line
-structure to profile - are added as their own regions. The union is
-biased hard toward recall.
+WHY RLSA AND NOT PROJECTION PROFILING
+-------------------------------------
+Projection profiling finds horizontal bands of ink, so it is blind to
+anything that is not laid out in rows. Measured on cleaned pages it put
+only 42-95% of the handwriting inside a box: it missed isolated
+question numbers ("2b)") and every arrow and vertical stroke of a
+diagram.
 
-`ink_coverage` reports the share of ink that ended up inside some box.
-That is the number that answers "will OCR see everything", so it is
-printed rather than left to be assumed.
+Run-length smoothing instead smears ink horizontally then vertically
+and takes connected components, so every stroke joins some region by
+construction. Same pages: 99.2% covered. Uncovered ink is content that
+silently never reaches OCR, so that difference is the whole point.
 
-Hand-labelled pages use their own boxes; every box records whether it
-came from a human or the model.
+The smear widths were swept rather than guessed:
+
+    hgap  vgap   regions/page   coverage
+      36    16          41.7      98.3%
+      60    16          17.7      99.2%     <- chosen
+      90    16          10.2      99.5%
+     150    16           9.8      99.7%
+
+60/16 sits at line granularity - roughly one region per line of
+handwriting - which is the unit handwriting OCR reads. Wider smears
+keep merging lines into paragraphs, which buys a little coverage and
+loses the line structure that makes the output useful.
 
 Run:
-    python segment.py                    # every content page
-    python segment.py --count 50         # a sample
-    python segment.py --no-images        # JSON only
+    python segment.py                 # every content page
+    python segment.py --count 40      # a sample
+    python segment.py --no-images
 """
 
 import argparse
+import csv
 import json
 import re
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -46,49 +59,63 @@ import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent
 
-CORPUS_DIR = BASE_DIR.parent / "preprocessing" / "cleaned"
+sys.path.insert(0, str(BASE_DIR.parent / "modules" / "scan_doc_v2"))
 
-HUMAN_LABELS = BASE_DIR / "labels" / "instances_cleaned.json"
+from normalize_page import ink_mask, split_horizontal_strokes  # noqa: E402
+
+CORPUS_DIR = BASE_DIR.parent / "preprocessing" / "cleaned"
 
 OUT_DIR = BASE_DIR / "segmented"
 IMAGE_OUT = OUT_DIR / "images"
 
-DEFAULT_WEIGHTS = BASE_DIR / "runs" / "seg" / "weights" / "best.pt"
-
-CLASSES = ["paragraph", "math", "figure", "table", "code", "crossed_out"]
-
-DEFAULT_LABEL = "paragraph"
-
 COVER_PAGE = 1
 
-# Dark, mutually distinguishable, and none close to the black ink they
-# are drawn over. BGR for OpenCV.
-COLOURS = {
-    "paragraph":   (32, 94, 27),      # #1B5E20 dark green
-    "math":        (9, 83, 180),      # #B45309 dark amber
-    "figure":      (28, 28, 183),     # #B71C1C dark red
-    "table":       (140, 20, 74),     # #4A148C dark purple
-    "code":        (92, 105, 0),      # #00695C dark teal
-    "crossed_out": (79, 14, 136),     # #880E4F dark crimson
-}
+# Run-length smoothing, sized to join the strokes of a WORD only.
+# Words are grouped into lines afterwards by position, which is
+# independent of how widely a given student spaces their writing.
+H_GAP = 22
+V_GAP = 10
 
-HEADER_HEIGHT = 62
-BOX_THICKNESS = 5
-JPEG_QUALITY = 92
+# Components smaller than this are speckle, not content. One stroke of
+# a pen is comfortably larger.
+MIN_REGION_AREA = 120
 
-# Cleaned pages put paper at 255, so anything well below is ink.
+# Lines closer than this many multiples of the rule pitch belong to the
+# same block. 1.6 keeps normal paragraph spacing together while a blank
+# line still starts a new block.
+BLOCK_GAP_PITCH = 1.6
+
+# The ruled-line pitch, in pixels. A CONSTANT, not a per-page
+# measurement, because the pages are now canonical: one booklet
+# format, one resolution, one size. Measured on pages where the rules
+# were cleanly detected (33-35 rules found) it is 58-59 every time.
+#
+# Estimating it per page was tried and only added failure modes: the
+# mask handed to the segmenter has the rules REMOVED, so autocorrelating
+# it measures handwriting, which on sparse pages returned 119 and 177
+# against a true 59 - inflating the block-grouping threshold until every
+# page collapsed into a single block.
+RULE_PITCH = 59
+
+# Components whose vertical centres sit within this many pitches of a
+# line's running centre belong to that line.
+LINE_CLUSTER_PITCH = 0.6
+
+# Taller than this and it is not a row of text - a diagram, a brace, a
+# long division - so it is kept as its own region.
+TALL_REGION_PITCH = 1.6
+
 INK_THRESHOLD = 160
 
-# A model box must cover this much of a classical block before its
-# class is believed.
-CLASS_MIN_OVERLAP = 0.35
+LINE_COLOUR = (32, 94, 27)       # dark green
+BLOCK_COLOUR = (140, 20, 74)     # dark purple
 
-# A model box this uncovered by classical blocks is a region the
-# classical pass missed, and is kept as its own box.
-NEW_REGION_MAX_OVERLAP = 0.55
+HEADER_HEIGHT = 54
+JPEG_QUALITY = 90
 
 
 def content_pages():
+    """Every page except each booklet's identity-bearing cover."""
 
     by_student = defaultdict(list)
 
@@ -104,9 +131,9 @@ def content_pages():
             covers += 1
             continue
 
-        by_student[student].append(
-            (f"s{student:02d}_c{cie}_p{number:02d}.png", path)
-        )
+        page_id = f"s{student:02d}_c{cie}_p{number:02d}"
+
+        by_student[student].append((page_id, student, cie, number, path))
 
     return by_student, covers
 
@@ -140,217 +167,307 @@ def round_robin(by_student, count):
     return picked
 
 
-def load_human():
+def find_components(mask):
+    """
+    Word-sized ink clusters: a light smear, then connected components.
 
-    if not HUMAN_LABELS.exists():
-        return {}
+    The smear is deliberately small. It joins the strokes of a word but
+    not the gap between words, because word spacing varies far too much
+    between writers here to be a reliable join - one page came out as
+    77 fragments at a 60px smear while another merged whole paragraphs.
+    Words are grouped into lines afterwards, by position instead.
+    """
 
-    with open(HUMAN_LABELS) as handle:
-        coco = json.load(handle)
+    smeared = cv2.morphologyEx(
+        mask, cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (H_GAP, 1)),
+    )
 
-    names = {c["id"]: c["name"] for c in coco["categories"]}
-    images = {i["id"]: i["file_name"] for i in coco["images"]}
+    smeared = cv2.morphologyEx(
+        smeared, cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (1, V_GAP)),
+    )
 
-    grouped = defaultdict(list)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(smeared, 8)
 
-    for ann in coco["annotations"]:
-        x, y, w, h = ann["bbox"]
-        grouped[images[ann["image_id"]]].append(
-            (names[ann["category_id"]], [x, y, x + w, y + h])
-        )
+    boxes = []
 
-    return dict(grouped)
+    for index in range(1, count):
 
+        x, y, w, h, area = stats[index]
 
-def overlap_ratio(inner, outer):
-    """Share of `inner` inside `outer`."""
+        if area >= MIN_REGION_AREA:
+            boxes.append((int(x), int(y), int(x + w), int(y + h)))
 
-    ax1, ay1, ax2, ay2 = inner
-    bx1, by1, bx2, by2 = outer
-
-    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-
-    if ix2 <= ix1 or iy2 <= iy1:
-        return 0.0
-
-    area = (ax2 - ax1) * (ay2 - ay1)
-
-    return 0.0 if area <= 0 else ((ix2 - ix1) * (iy2 - iy1)) / area
+    return boxes
 
 
-def ink_coverage(gray, boxes):
-    """Share of ink pixels inside some box - uncovered ink never reaches OCR."""
+def find_lines(mask):
+    """
+    One region per line of handwriting, plus tall regions on their own.
 
-    ink = gray < INK_THRESHOLD
+    Components are assigned to a line by clustering their vertical
+    CENTRES against the known rule pitch. Two simpler rules were tried
+    first and both failed:
 
-    total = int(ink.sum())
+      a wider horizontal smear - word spacing is writer-dependent, so
+      no single gap gives lines on every page;
+
+      merging components whose vertical ranges overlap - the merged
+      band keeps growing as it absorbs each new component, so one tall
+      item eventually swallows the page. It returned 3 lines for a full
+      page of writing.
+
+    Clustering against a fixed pitch cannot run away like that, because
+    the tolerance never grows. Anything taller than a line and a half
+    is not text laid out in rows - a diagram, a brace, a long division -
+    and is kept as its own region rather than dragged into a line.
+    """
+
+    boxes = find_components(mask)
+
+    tall = [b for b in boxes if (b[3] - b[1]) > TALL_REGION_PITCH * RULE_PITCH]
+
+    flat = [b for b in boxes if (b[3] - b[1]) <= TALL_REGION_PITCH * RULE_PITCH]
+
+    flat.sort(key=lambda b: (b[1] + b[3]) / 2)
+
+    tolerance = LINE_CLUSTER_PITCH * RULE_PITCH
+
+    clusters = []
+
+    current = []
+    centre = None
+
+    for box in flat:
+
+        box_centre = (box[1] + box[3]) / 2
+
+        if centre is None or abs(box_centre - centre) <= tolerance:
+            current.append(box)
+            centre = float(np.mean([(b[1] + b[3]) / 2 for b in current]))
+        else:
+            clusters.append(current)
+            current = [box]
+            centre = box_centre
+
+    if current:
+        clusters.append(current)
+
+    regions = [
+        (min(b[0] for b in group), min(b[1] for b in group),
+         max(b[2] for b in group), max(b[3] for b in group))
+        for group in clusters
+    ] + tall
+
+    lines = []
+
+    for x1, y1, x2, y2 in regions:
+
+        lines.append({
+            "bbox": [x1, y1, x2, y2],
+            "ink": int(mask[y1:y2, x1:x2].sum()),
+        })
+
+    # reading order: top to bottom, then left to right within a band
+    lines.sort(key=lambda r: (r["bbox"][1], r["bbox"][0]))
+
+    return lines
+
+
+def group_blocks(lines, pitch):
+    """
+    Group lines into blocks by vertical gap.
+
+    A block is the unit a reconstruction step would treat as one
+    paragraph or one figure; lines are the unit OCR reads.
+    """
+
+    if not lines:
+        return []
+
+    threshold = BLOCK_GAP_PITCH * pitch
+
+    blocks = []
+
+    current = [lines[0]]
+
+    for line in lines[1:]:
+
+        # the PREVIOUS line's bottom, not the running maximum over the
+        # block. Using the maximum collapses the page: one tall region
+        # - a diagram, or a brace spanning several lines - sets a
+        # bottom that nothing afterwards can clear, so every remaining
+        # line joins the same block and the page comes out as 1 block.
+        previous_bottom = current[-1]["bbox"][3]
+
+        if line["bbox"][1] - previous_bottom > threshold:
+            blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+
+    blocks.append(current)
+
+    grouped = []
+
+    for members in blocks:
+
+        x1 = min(m["bbox"][0] for m in members)
+        y1 = min(m["bbox"][1] for m in members)
+        x2 = max(m["bbox"][2] for m in members)
+        y2 = max(m["bbox"][3] for m in members)
+
+        grouped.append({"bbox": [x1, y1, x2, y2], "lines": members})
+
+    return grouped
+
+
+def ink_coverage(mask, lines):
+    """Share of handwriting inside some region."""
+
+    total = int(mask.sum())
 
     if total == 0:
         return 1.0
 
-    covered = np.zeros(gray.shape, bool)
+    covered = np.zeros(mask.shape, bool)
 
-    for _, (x1, y1, x2, y2) in boxes:
-        covered[max(0, int(y1)):int(y2), max(0, int(x1)):int(x2)] = True
+    for line in lines:
+        x1, y1, x2, y2 = line["bbox"]
+        covered[y1:y2, x1:x2] = True
 
-    return float((ink & covered).sum()) / total
-
-
-def hybrid_boxes(path, model, imgsz, conf):
-    """Classical geometry for coverage, model for the class name."""
-
-    from preannotate import page_boxes
-
-    try:
-        blocks, _, _ = page_boxes(path, use_classifier=False, want_image=False)
-    except Exception:
-        blocks = []
-
-    result = model.predict(str(path), imgsz=imgsz, conf=conf, verbose=False)[0]
-
-    predictions = []
-
-    for box in result.boxes:
-        x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
-        predictions.append(
-            (CLASSES[int(box.cls)], [x1, y1, x2, y2], float(box.conf))
-        )
-
-    boxes, scores = [], []
-
-    for _, bx1, by1, bx2, by2 in blocks:
-
-        block = [float(bx1), float(by1), float(bx2), float(by2)]
-
-        best_label, best_share, best_score = DEFAULT_LABEL, 0.0, None
-
-        for label, prediction, score in predictions:
-
-            share = overlap_ratio(block, prediction)
-
-            if share > best_share:
-                best_share, best_label, best_score = share, label, score
-
-        # a weak overlap is not evidence of class; fall back to the
-        # majority class rather than inventing one
-        if best_share < CLASS_MIN_OVERLAP:
-            best_label, best_score = DEFAULT_LABEL, None
-
-        boxes.append((best_label, block))
-        scores.append(round(best_score, 4) if best_score else None)
-
-    for label, prediction, score in predictions:
-
-        if max((overlap_ratio(prediction, b) for _, b in boxes),
-               default=0.0) < NEW_REGION_MAX_OVERLAP:
-
-            boxes.append((label, prediction))
-            scores.append(round(score, 4))
-
-    return boxes, scores
+    return float((mask.astype(bool) & covered).sum()) / total
 
 
-def draw_legend(canvas, present):
+def segment_page(path):
+    """Returns (blocks, coverage, page_bgr, mask)."""
 
-    if not present:
-        return
+    page = cv2.imread(str(path))
 
-    pad, row, width = 12, 34, 250
+    if page is None:
+        return None, None, None, None
 
-    height = pad * 2 + row * len(present)
+    clean, _, _ = split_horizontal_strokes(ink_mask(page))
 
-    x2 = canvas.shape[1] - 20
-    x1 = x2 - width
-    y1 = HEADER_HEIGHT + 20
-    y2 = y1 + height
+    mask = (clean > 0).astype(np.uint8)
 
-    overlay = canvas.copy()
-    cv2.rectangle(overlay, (x1, y1), (x2, y2), (255, 255, 255), -1)
-    cv2.addWeighted(overlay, 0.85, canvas, 0.15, 0, canvas)
+    lines = find_lines(mask)
 
-    cv2.rectangle(canvas, (x1, y1), (x2, y2), (60, 60, 60), 2)
+    blocks = group_blocks(lines, RULE_PITCH)
 
-    for index, label in enumerate(present):
-
-        cy = y1 + pad + row * index + 8
-
-        cv2.rectangle(canvas, (x1 + pad, cy), (x1 + pad + 26, cy + 20),
-                      COLOURS[label], -1)
-        cv2.putText(canvas, label, (x1 + pad + 36, cy + 17),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (40, 40, 40), 2)
+    return blocks, ink_coverage(mask, lines), page, mask
 
 
-def render(page, boxes, source, coverage, out_path):
+def render(page, blocks, page_id, coverage, out_path):
 
     height, width = page.shape[:2]
 
     canvas = np.full((height + HEADER_HEIGHT, width, 3), 255, np.uint8)
+    canvas[HEADER_HEIGHT:] = page
 
-    canvas[HEADER_HEIGHT:] = (
-        page if page.ndim == 3 else cv2.cvtColor(page, cv2.COLOR_GRAY2BGR)
-    )
+    for block in blocks:
 
-    for label, (x1, y1, x2, y2) in boxes:
+        x1, y1, x2, y2 = block["bbox"]
 
-        colour = COLOURS.get(label, (0, 0, 0))
+        cv2.rectangle(canvas, (x1 - 6, y1 - 6 + HEADER_HEIGHT),
+                      (x2 + 6, y2 + 6 + HEADER_HEIGHT), BLOCK_COLOUR, 3)
 
-        top = int(y1) + HEADER_HEIGHT
-        bottom = int(y2) + HEADER_HEIGHT
+        for line in block["lines"]:
 
-        cv2.rectangle(canvas, (int(x1), top), (int(x2), bottom),
-                      colour, BOX_THICKNESS)
+            lx1, ly1, lx2, ly2 = line["bbox"]
 
-        tag_w = 20 + 19 * len(label)
-        tag_top = max(HEADER_HEIGHT, top - 40)
+            cv2.rectangle(canvas, (lx1, ly1 + HEADER_HEIGHT),
+                          (lx2, ly2 + HEADER_HEIGHT), LINE_COLOUR, 2)
 
-        cv2.rectangle(canvas, (int(x1), tag_top),
-                      (int(x1) + tag_w, tag_top + 36), colour, -1)
-        cv2.putText(canvas, label, (int(x1) + 10, tag_top + 27),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.78, (255, 255, 255), 2)
-
-    draw_legend(canvas, [c for c in CLASSES if any(b[0] == c for b in boxes)])
+    total_lines = sum(len(b["lines"]) for b in blocks)
 
     cv2.rectangle(canvas, (0, 0), (width, HEADER_HEIGHT), (35, 35, 35), -1)
 
     cv2.putText(
         canvas,
-        f"{out_path.stem}   |   {len(boxes)} regions   |   "
-        f"{source.upper()}   |   ink covered {100 * coverage:.0f}%",
-        (18, 41), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2,
+        f"{page_id}   |   {len(blocks)} blocks, {total_lines} lines   |   "
+        f"ink covered {100 * coverage:.1f}%",
+        (16, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2,
     )
 
     cv2.imwrite(str(out_path), canvas,
                 [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
 
 
+def write_tables(pages):
+    """Flat CSVs, one row per entity, ready to load into tables."""
+
+    with open(OUT_DIR / "pages.csv", "w", newline="") as handle:
+
+        writer = csv.writer(handle)
+        writer.writerow([
+            "page_id", "student_id", "cie", "page_no", "width", "height",
+            "n_blocks", "n_lines", "ink_coverage",
+        ])
+
+        for page in pages:
+            writer.writerow([
+                page["page_id"], page["student_id"], page["cie"],
+                page["page_no"], page["width"], page["height"],
+                len(page["blocks"]),
+                sum(len(b["lines"]) for b in page["blocks"]),
+                page["ink_coverage"],
+            ])
+
+    with open(OUT_DIR / "blocks.csv", "w", newline="") as handle:
+
+        writer = csv.writer(handle)
+        writer.writerow([
+            "block_id", "page_id", "block_order", "x", "y", "w", "h",
+            "n_lines",
+        ])
+
+        for page in pages:
+            for order, block in enumerate(page["blocks"]):
+                x1, y1, x2, y2 = block["bbox"]
+                writer.writerow([
+                    f"{page['page_id']}_b{order:02d}", page["page_id"],
+                    order, x1, y1, x2 - x1, y2 - y1, len(block["lines"]),
+                ])
+
+    with open(OUT_DIR / "lines.csv", "w", newline="") as handle:
+
+        writer = csv.writer(handle)
+        writer.writerow([
+            "line_id", "page_id", "block_id", "line_order",
+            "x", "y", "w", "h", "ink_pixels",
+        ])
+
+        for page in pages:
+            for border, block in enumerate(page["blocks"]):
+                for lorder, line in enumerate(block["lines"]):
+                    x1, y1, x2, y2 = line["bbox"]
+                    writer.writerow([
+                        f"{page['page_id']}_b{border:02d}_l{lorder:02d}",
+                        page["page_id"],
+                        f"{page['page_id']}_b{border:02d}",
+                        lorder, x1, y1, x2 - x1, y2 - y1, line["ink"],
+                    ])
+
+
 def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     parser.add_argument("--count", type=int)
-    parser.add_argument("--imgsz", type=int, default=896)
-    parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--no-images", action="store_true")
 
     args = parser.parse_args()
 
-    weights = Path(args.weights)
-
-    if not weights.exists():
-        sys.exit(f"{weights} not found - train first")
-
     if not CORPUS_DIR.exists():
-        sys.exit(f"{CORPUS_DIR} not found - run preprocessing/clean.py first")
+        sys.exit(f"{CORPUS_DIR} not found - run preprocessing/clean.py")
 
     by_student, covers = content_pages()
 
     available = sum(len(v) for v in by_student.values())
 
-    pages = round_robin(by_student, args.count or available)
-
-    human = load_human()
+    selected = round_robin(by_student, args.count or available)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -358,145 +475,84 @@ def main():
         IMAGE_OUT.mkdir(parents=True, exist_ok=True)
 
     print(f"Excluded  : {covers} cover page(s)")
-    print(f"Segmenting: {len(pages)} of {available} content pages")
-    print(f"Weights   : {weights}\n")
+    print(f"Segmenting: {len(selected)} of {available} content pages\n")
 
-    from ultralytics import YOLO
+    pages = []
 
-    model = YOLO(str(weights))
-
-    images, annotations = [], []
-
-    counts = Counter()
-    by_source = Counter()
-
-    coverages = []
-    empty = 0
-
-    for index, (name, path) in enumerate(pages, start=1):
+    for index, (page_id, student, cie, number, path) in enumerate(
+            selected, start=1):
 
         if index % 100 == 0:
-            print(f"  {index}/{len(pages)}", flush=True)
+            print(f"  {index}/{len(selected)}", flush=True)
 
-        if name in human:
-            boxes = human[name]
-            scores = [None] * len(boxes)
-            source = "human"
-        else:
-            boxes, scores = hybrid_boxes(path, model, args.imgsz, args.conf)
-            source = "model"
+        blocks, coverage, page, _ = segment_page(path)
 
-        by_source[source] += 1
-
-        page = cv2.imread(str(path))
-
-        if page is None:
+        if blocks is None:
             continue
 
-        gray = cv2.cvtColor(page, cv2.COLOR_BGR2GRAY)
+        height, width = page.shape[:2]
 
-        coverage = ink_coverage(gray, boxes)
-
-        coverages.append(coverage)
-
-        if not boxes:
-            empty += 1
-
-        height, width = gray.shape
-
-        image_id = len(images) + 1
-
-        images.append({
-            "id": image_id,
-            "file_name": name,
+        pages.append({
+            "page_id": page_id,
+            "student_id": student,
+            "cie": cie,
+            "page_no": number,
             "width": width,
             "height": height,
-            "source": source,
             "ink_coverage": round(coverage, 4),
+            "blocks": blocks,
         })
 
-        for (label, (x1, y1, x2, y2)), score in zip(boxes, scores):
-
-            record = {
-                "id": len(annotations) + 1,
-                "image_id": image_id,
-                "category_id": CLASSES.index(label) + 1,
-                "bbox": [x1, y1, x2 - x1, y2 - y1],
-                "area": (x2 - x1) * (y2 - y1),
-                "iscrowd": 0,
-                "segmentation": [],
-                "source": source,
-            }
-
-            if score is not None:
-                record["score"] = score
-
-            annotations.append(record)
-
-            counts[label] += 1
-
         if not args.no_images:
-            render(page, boxes, source, coverage,
-                   IMAGE_OUT / (Path(name).stem + ".jpg"))
+            render(page, blocks, page_id, coverage,
+                   IMAGE_OUT / f"{page_id}.jpg")
 
-    coco = {
+    document = {
         "info": {
             "description": (
-                "Layout segmentation of the cleaned handwritten answer "
-                "scripts. Cover pages excluded. source=human boxes are "
-                "hand made; source=model are predicted and are not "
-                "ground truth."
+                "Content localisation for the cleaned handwritten answer "
+                "scripts. Regions mark WHERE content is; they carry no "
+                "class. Hierarchy is page -> block -> line, in reading "
+                "order."
             ),
             "date_created": str(date.today()),
+            "h_gap": H_GAP,
+            "v_gap": V_GAP,
         },
-        "licenses": [],
-        "images": images,
-        "annotations": annotations,
-        "categories": [
-            {"id": i + 1, "name": n, "supercategory": ""}
-            for i, n in enumerate(CLASSES)
-        ],
+        "pages": pages,
     }
 
-    json_path = OUT_DIR / "segmentation.json"
+    with open(OUT_DIR / "segmentation.json", "w") as handle:
+        json.dump(document, handle)
 
-    with open(json_path, "w") as handle:
-        json.dump(coco, handle)
+    write_tables(pages)
 
-    total = sum(counts.values()) or 1
+    coverages = [p["ink_coverage"] for p in pages]
+    line_counts = [sum(len(b["lines"]) for b in p["blocks"]) for p in pages]
+    block_counts = [len(p["blocks"]) for p in pages]
 
-    mean_cov = sum(coverages) / max(1, len(coverages))
-
-    lines = [
-        f"pages segmented : {len(images)}",
-        f"  human labels  : {by_source['human']}",
-        f"  model output  : {by_source['model']}",
-        f"regions         : {sum(counts.values())} "
-        f"({sum(counts.values()) / max(1, len(images)):.1f} per page)",
-        f"pages with none : {empty}",
+    summary = "\n".join([
+        f"pages       : {len(pages)}",
+        f"blocks      : {sum(block_counts)}  "
+        f"({np.mean(block_counts):.1f} per page)",
+        f"lines       : {sum(line_counts)}  "
+        f"({np.mean(line_counts):.1f} per page)",
         "",
-        f"ink coverage    : mean {100 * mean_cov:.1f}%  "
-        f"worst {100 * min(coverages or [0]):.1f}%",
-        f"pages under 90% : {sum(1 for c in coverages if c < 0.90)}",
-        "",
-        "class distribution:",
-    ]
-
-    for label in CLASSES:
-        lines.append(
-            f"  {label:<12} {counts.get(label, 0):>6}  "
-            f"{100 * counts.get(label, 0) / total:5.1f}%"
-        )
-
-    summary = "\n".join(lines)
+        f"ink coverage: mean {100 * np.mean(coverages):.1f}%   "
+        f"median {100 * np.median(coverages):.1f}%   "
+        f"worst {100 * min(coverages):.1f}%",
+        f"pages under 95%: {sum(1 for c in coverages if c < 0.95)}",
+        f"pages under 90%: {sum(1 for c in coverages if c < 0.90)}",
+    ])
 
     (OUT_DIR / "summary.txt").write_text(summary + "\n")
 
     print("\n" + summary)
-    print(f"\nJSON   : {json_path}")
+    print(f"\nJSON  : {OUT_DIR / 'segmentation.json'}")
+    print(f"Tables: pages.csv, blocks.csv, lines.csv in {OUT_DIR}")
 
     if not args.no_images:
-        print(f"Images : {IMAGE_OUT}")
+        print(f"Images: {IMAGE_OUT}")
 
 
 if __name__ == "__main__":
