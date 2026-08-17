@@ -39,7 +39,7 @@ REPO_ID = "prss-majorproject-37/cleaned-handwritten-answerscripts"
 REPO_TYPE = "dataset"
 
 PREP_DIR = Path(__file__).resolve().parent
-REPO_ROOT = PREP_DIR.parent
+REPO_ROOT = PREP_DIR.parent.parent   # modules/01_prepare/ -> repo root
 
 # The end of the pipeline as it stands.
 DEFAULT_STAGE = "03_tone"

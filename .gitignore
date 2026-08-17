@@ -13,19 +13,20 @@ preprocessing_legacy/
 # and marks. The source dataset is a PRIVATE Hugging Face repo and the
 # converted copies must not enter git history either.
 #
-# preprocessing/ is now organised as numbered per-stage folders
-# (01_deskew/, 02_.../...), each with its own input/output/preview -
-# all of which hold real page images or point at them, so every stage
-# is covered by one glob rather than adding a line per stage.
+# modules/01_prepare/ is organised as numbered per-stage folders
+# (01_deskew/, 02_crop/, 03_tone/), each with its own
+# input/output/preview - all of which hold real page images or point at
+# them, so every stage is covered by one glob rather than adding a line
+# per stage.
 # No trailing slash: a stage's input/ is sometimes a real directory and
 # sometimes a symlink to the previous stage's output. A trailing slash
 # matches only directories, which would leave the symlink form tracked -
 # and it points into gitignored preprocessing_legacy/, so it would be a
 # broken link for anyone else cloning.
-preprocessing/*/input
-preprocessing/*/output
-preprocessing/*/preview
-preprocessing/students.csv
+modules/01_prepare/*/input
+modules/01_prepare/*/output
+modules/01_prepare/*/preview
+modules/01_prepare/students.csv
 
 # The annotation sample points at those same pages, and the review
 # sheets rendered from them are readable images of real answer scripts.
