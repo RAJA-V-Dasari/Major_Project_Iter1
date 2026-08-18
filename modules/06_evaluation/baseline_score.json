@@ -1,0 +1,71 @@
+{
+ "pages": 33,
+ "boxes": 126,
+ "regions_emitted": 989,
+ "regions_per_page": 29.97,
+ "fragments_per_box_mean": 5.603,
+ "fragments_per_box_median": 4.0,
+ "unattributed_regions": 283,
+ "by_class": {
+  "code": {
+   "boxes": 5,
+   "fragments_median": 2.0,
+   "fragments_mean": 4.0,
+   "fragments_max": 8,
+   "boxes_with_no_region": 0,
+   "ink_recall_median": 0.9969,
+   "ink_recall_min": 0.9943,
+   "spill_median": 0.0
+  },
+  "crossed_out": {
+   "boxes": 1,
+   "fragments_median": 0.0,
+   "fragments_mean": 0.0,
+   "fragments_max": 0,
+   "boxes_with_no_region": 1,
+   "ink_recall_median": 0.9991,
+   "ink_recall_min": 0.9991,
+   "spill_median": null
+  },
+  "figure": {
+   "boxes": 13,
+   "fragments_median": 6.0,
+   "fragments_mean": 8.31,
+   "fragments_max": 18,
+   "boxes_with_no_region": 0,
+   "ink_recall_median": 0.9954,
+   "ink_recall_min": 0.9871,
+   "spill_median": 0.0463
+  },
+  "math": {
+   "boxes": 38,
+   "fragments_median": 4.0,
+   "fragments_mean": 6.79,
+   "fragments_max": 38,
+   "boxes_with_no_region": 3,
+   "ink_recall_median": 0.9981,
+   "ink_recall_min": 0.9886,
+   "spill_median": 0.0783
+  },
+  "paragraph": {
+   "boxes": 68,
+   "fragments_median": 4.0,
+   "fragments_mean": 4.56,
+   "fragments_max": 20,
+   "boxes_with_no_region": 2,
+   "ink_recall_median": 0.9987,
+   "ink_recall_min": 0.9784,
+   "spill_median": 0.0868
+  },
+  "table": {
+   "boxes": 1,
+   "fragments_median": 10.0,
+   "fragments_mean": 10.0,
+   "fragments_max": 10,
+   "boxes_with_no_region": 0,
+   "ink_recall_median": 0.9965,
+   "ink_recall_min": 0.9965,
+   "spill_median": 0.0554
+  }
+ }
+}

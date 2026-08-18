@@ -51,6 +51,27 @@ not error, it silently mis-segmented. Pitch is measured per page from
 the rules that were just removed, so the same code follows the corpus
 to another resolution on its own.
 
+A REGION IS A UNIT OF CONTENT, NOT A CONNECTED COMPONENT
+-------------------------------------------------------
+Finding every stroke is not the same as grouping them correctly, and
+this module used to do only the first. It put 99.8% of the ink inside
+some box and then handed the next stage 30 boxes a page, because the
+pieces of one thing kept arriving as several regions:
+
+  - a descender is not on its line's baseline, so it failed the snap
+    and was emitted alone. 90% of all unsnapped components, 25% of
+    every region produced. See ABSORB_* and `absorb`.
+  - a table's cell borders lie along the printed rules, so each of its
+    rows snapped like a line of writing. Scored against the annotated
+    pages, one table came out as 10 regions. See GRID_* and
+    `find_grids` / `merge_grids`.
+
+Measured over 33 annotated pages by `modules/06_evaluation`, fixing
+both took regions from 30.0 to 21.8 a page and fragments per
+hand-drawn region from 5.60 to 4.04 - figures 8.31 -> 3.23, maths
+6.79 -> 4.61, tables 10 -> 1 - with ink coverage unchanged at 99.8%.
+Coverage staying flat is the point: this is regrouping, not discarding.
+
 COVER PAGES ARE SKIPPED
 -----------------------
 page_01 of every booklet is the printed identity block - name, USN,
@@ -185,6 +206,128 @@ TALL_REGION_PITCH = 1.6
 # as sitting on no line at all. See find_lines for the measurements.
 LINE_SNAP_PITCH = 0.45
 
+# --- absorbing what did not snap ------------------------------------
+# The band a written line actually occupies, measured from the printed
+# rule it rests on: up to the ascender, down to the descender. A
+# component that did not snap but lies in this band, over a line that
+# did, is PART of that line and not a region of its own.
+#
+# This exists because the snap above is a baseline test, and a
+# descender does not have the baseline of its own word. Measured over
+# 50 pages: 390 components failed the snap, and 351 of them - 90% -
+# were descenders hanging below a line that snapped perfectly well.
+# Emitted alone they became 25% of every region the module produced:
+# the loop of a 'g', the tail of a 'y', each cropped as its own "line"
+# and queued for OCR. A further 2.8% were superscripts sitting above
+# their line, which is worse than cosmetic, because the superscript of
+# 2^{m-1} carries the meaning of the expression it was cut out of.
+#
+# Asymmetric on purpose: ascenders and superscripts reach higher above
+# the rule than descenders fall below it, and the gap above a rule is
+# shared with the line before, so the upward reach is the value that
+# has to stay short of a full pitch.
+ABSORB_ASCENT_PITCH = 0.85
+ABSORB_DESCENT_PITCH = 0.50
+
+# A component is only absorbed into a line it genuinely sits over -
+# this much of its width must be within the line's horizontal extent.
+# Without it, a diagram label level with a paragraph on the far side of
+# the page would be swallowed by it.
+ABSORB_OVERLAP_FRACTION = 0.5
+
+# --- ruled structure (tables, boxed diagrams) -----------------------
+# A hand-drawn grid is the one layout this module cannot treat as text
+# and must not: its cell borders lie along the printed rules, so every
+# row of a table snaps like a line of writing and the table comes out
+# shredded. Measured against the annotated pages, a table was cut into
+# a median of 26 regions - by far the worst class, and the reason this
+# section exists.
+#
+# What identifies a grid is the pen strokes drawing it: long, straight
+# and thin, unlike any letter. Rule removal has already taken out the
+# PRINTED horizontals (anything past RULE_WIDTH_FRACTION of the page),
+# so what is left at this length is drawn by hand.
+#
+# Measured over the annotated boxes: 13 of 14 tables contain 6 or more
+# such strokes and 93% contain at least two, against 1% of paragraphs -
+# 61 of 68 paragraphs contain none at all. That gap is what the
+# threshold below sits in.
+# The lengths themselves were swept against the annotated pages rather
+# than picked. Loosening them from 2.5/1.0 to 1.5/0.8 pitch cut figure
+# fragments from 7.3 to 3.4 and maths from 5.6 to 4.6, while paragraph
+# fragments went 3.91 -> 3.85 and paragraph spill 12.7% -> 12.9% - i.e.
+# it costs prose nothing measurable, because prose contains no strokes
+# of this shape for the detector to fire on. Below 1.5/0.8 the curve is
+# flat (3.38 -> 3.00 over the whole remaining range) and 13 annotated
+# figures is far too few to justify chasing it, so this sits at the
+# knee with margin rather than at the minimum.
+GRID_H_STROKE_PITCH = 1.5       # a horizontal stroke this long is drawn
+GRID_V_STROKE_PITCH = 0.8       # a vertical stroke this tall is drawn
+GRID_STROKE_THIN_PITCH = 0.35   # ...and no thicker than this
+GRID_H_ASPECT = 6.0
+GRID_V_ASPECT = 4.0
+
+# Strokes closer than this belong to the same drawing.
+GRID_LINK_PITCH = 0.75
+
+# One stroke is an underline under a heading, not a table. Requiring
+# two is what keeps this off ordinary prose - see the 1% above.
+MIN_GRID_STROKES = 2
+
+# How far beyond its own strokes a drawing may reach, vertically.
+#
+# Merging has to grow the box - absorbing one row of a table usually
+# extends it over the next - but growth that is only bounded by what it
+# touches does not stop. Observed on s57_c1_p07: the box crept upward a
+# line at a time and took three lines of ordinary prose into the
+# diagram. Content pulled into a drawing never reaches the recogniser,
+# which is the same failure as dropping it.
+#
+# The strokes say where the drawing is; nothing above them does. So
+# vertical reach is capped at the stroke cluster's own extent plus this
+# margin - enough for a row of labels over or under the drawing - while
+# horizontal reach stays free, because a label to one side is at the
+# drawing's own height and cannot run away up the page.
+#
+# Capping the area a region must have inside the box was tried first
+# and is worse than either extreme: at 0.5 it broke the growth that
+# makes merging work at all, because a wide table row overlaps a narrow
+# stroke cluster by well under half its own area, and figure fragments
+# went from 3.2 back up to 9.5.
+#
+# Swept from 1.0 pitch to unbounded. Figure fragments bottom out at
+# 3.23 by 2.0 and do not improve after; the number that keeps moving is
+# a single tall diagram (s57_c1_p07: 40 regions at 1.0, 27 at 2.5, 24
+# unbounded). Text swallowed by a drawing is 1 box at 1.0 and 2 at
+# every larger value including unbounded, so prose loss is not what
+# this trades against - it is flat.
+#
+# 2.5 therefore takes the whole measurable gain. It stays a finite cap
+# rather than going unbounded because the remaining 3 regions on one
+# page are not worth giving up the guarantee that no page can collapse
+# into a single region, which is the failure this bound exists for.
+GRID_GROW_PITCH = 2.5
+
+# NOTE ON FIGURES. This finds drawn structure, and a hand-drawn diagram
+# usually has some - so it helps figures too, measurably. What it does
+# NOT do is CLASSIFY a region as a figure, and that distinction is the
+# whole point of where the line is drawn here.
+#
+# Every signal that might tell a diagram from prose was measured over
+# the annotated pages and none separates them: ink whose baseline snaps
+# to a printed rule is 98% inside figure boxes against 100% inside
+# paragraphs, tall-component mass is 0.00 for both, and ink density is
+# 0.031 against 0.066 - overlapping distributions in every case.
+# Students draw diagrams on ruled paper and rest them on the rules
+# exactly as they rest their writing.
+#
+# Merging works anyway because it does not need to answer "is this a
+# figure". It only needs "are these two pieces part of one drawn
+# object", and a stroke joining them answers that locally. A diagram
+# with no straight strokes in it - a free-hand curve, a sketch - is
+# still missed, and no threshold here will catch it. That case needs a
+# learned detector; see modules/06_evaluation/README.md.
+#
 # Lines separated by more than this belong to different blocks.
 BLOCK_GAP_PITCH = 1.6
 
@@ -385,7 +528,7 @@ def find_lines(boxes, pitch, rule_rows):
         tolerance = LINE_SNAP_PITCH * pitch
 
         grouped = {}
-        orphans = []
+        unsnapped = []
 
         for box in flat:
 
@@ -394,10 +537,9 @@ def find_lines(boxes, pitch, rule_rows):
             if abs(rows[index] - box[3]) <= tolerance:
                 grouped.setdefault(index, []).append(box)
             else:
-                # writing that sits on no rule at all - a superscript,
-                # a label floating in a diagram. Keep it rather than
-                # forcing it onto the nearest line.
-                orphans.append(box)
+                unsnapped.append(box)
+
+        orphans = absorb(grouped, unsnapped, rows, pitch)
 
         for members in grouped.values():
             lines.append({
@@ -424,6 +566,257 @@ def find_lines(boxes, pitch, rule_rows):
     lines.sort(key=lambda r: (r["bbox"][1], r["bbox"][0]))
 
     return lines
+
+
+def absorb(grouped, unsnapped, rows, pitch):
+    """
+    Put each unsnapped component back into the line it belongs to.
+
+    The snap in find_lines is a BASELINE test, and there are parts of a
+    written line that do not share their line's baseline: a descender
+    hangs below it, a superscript floats above it, a stray dot sits
+    beside it. Each of those failed the snap and used to be emitted as
+    a region of its own - 25% of everything this module produced, and
+    the single largest source of crops too small to read.
+
+    A component belongs to a line when it lies in that line's band -
+    from the ascender height above the printed rule to the descender
+    depth below it - AND sits horizontally over writing that snapped to
+    that rule. Both conditions are needed. The band alone would pull in
+    a diagram label that happens to be level with a paragraph on the
+    other side of the page; the overlap alone would pull in the line
+    above and the line below.
+
+    Where two bands overlap - and they do, because ascent plus descent
+    is more than a pitch - the component goes to the band it overlaps
+    more, so a descender that dips into the next line's ascender zone
+    still returns to its own line.
+
+    Mutates `grouped`. Returns the components that genuinely belong to
+    no line, which stay regions in their own right: labels inside a
+    diagram, a mark in the margin.
+    """
+
+    if not grouped:
+        return unsnapped
+
+    extents = {index: (min(b[0] for b in members), max(b[2] for b in members))
+               for index, members in grouped.items()}
+
+    ascent = ABSORB_ASCENT_PITCH * pitch
+    descent = ABSORB_DESCENT_PITCH * pitch
+
+    orphans = []
+
+    for box in unsnapped:
+
+        width = max(box[2] - box[0], 1)
+
+        best, best_overlap = None, 0.0
+
+        for index, (left, right) in extents.items():
+
+            if (min(box[2], right) - max(box[0], left)) < (
+                    ABSORB_OVERLAP_FRACTION * width):
+                continue
+
+            top = rows[index] - ascent
+            bottom = rows[index] + descent
+
+            overlap = min(box[3], bottom) - max(box[1], top)
+
+            if overlap > best_overlap:
+                best, best_overlap = index, overlap
+
+        if best is None:
+            orphans.append(box)
+        else:
+            grouped[best].append(box)
+
+    return orphans
+
+
+def find_grids(clean, pitch):
+    """
+    Areas of hand-drawn ruled structure, as boxes. See the GRID_* notes.
+
+    A table's cell borders lie along the printed rules, so every row of
+    it snaps to a rule exactly like a line of writing and the table is
+    emitted one row - often one cell - at a time. Nothing downstream can
+    reassemble it, because by then it is only a list of boxes.
+
+    The strokes that draw the grid are the evidence, and they are
+    unmistakable: far longer than a letter, and far thinner. The
+    printed rules are already gone by this point, so a horizontal
+    stroke still this long was drawn by hand.
+    """
+
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(clean, 8)
+
+    strokes = np.zeros_like(clean)
+    found = 0
+
+    for label in range(1, count):
+
+        w = stats[label, cv2.CC_STAT_WIDTH]
+        h = stats[label, cv2.CC_STAT_HEIGHT]
+
+        horizontal = (w >= GRID_H_STROKE_PITCH * pitch
+                      and h <= GRID_STROKE_THIN_PITCH * pitch
+                      and w >= GRID_H_ASPECT * max(h, 1))
+
+        vertical = (h >= GRID_V_STROKE_PITCH * pitch
+                    and w <= GRID_STROKE_THIN_PITCH * pitch
+                    and h >= GRID_V_ASPECT * max(w, 1))
+
+        if horizontal or vertical:
+            strokes[labels == label] = 255
+            found += 1
+
+    if found < MIN_GRID_STROKES:
+        return []
+
+    link = max(1, int(GRID_LINK_PITCH * pitch))
+
+    joined = cv2.dilate(
+        strokes,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (link, link)),
+    )
+
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(joined, 8)
+
+    grids = []
+
+    for label in range(1, count):
+
+        # how many separate strokes fell into this cluster - one is an
+        # underline under a heading, not a grid
+        piece = (labels == label) & (strokes > 0)
+
+        pieces = cv2.connectedComponentsWithStats(
+            piece.astype(np.uint8) * 255, 8
+        )[0] - 1
+
+        if pieces < MIN_GRID_STROKES:
+            continue
+
+        x = stats[label, cv2.CC_STAT_LEFT] + link // 2
+        y = stats[label, cv2.CC_STAT_TOP] + link // 2
+        w = stats[label, cv2.CC_STAT_WIDTH] - link
+        h = stats[label, cv2.CC_STAT_HEIGHT] - link
+
+        grids.append([int(x), int(y), int(x + w), int(y + h)])
+
+    return grids
+
+
+def merge_grids(lines, grids, pitch):
+    """
+    Collapse everything inside a drawn grid into one region.
+
+    A table is one object. Handing OCR its 26 pieces separately loses
+    the only thing that made it a table - which cell sits beside which -
+    and hands a recogniser trained on lines of prose a row of digits
+    with no context.
+
+    The grid box grows to contain the regions it touches, repeatedly,
+    because absorbing one row usually extends it over the next. Growth
+    is bounded vertically by GRID_GROW_PITCH past the strokes that
+    started it, so it cannot walk up the page into the prose above.
+    Regions no grid claims pass through untouched.
+    """
+
+    if not grids:
+        return lines
+
+    def overlaps(a, b):
+        return (min(a[2], b[2]) > max(a[0], b[0])
+                and min(a[3], b[3]) > max(a[1], b[1]))
+
+    grow = GRID_GROW_PITCH * pitch
+
+    boxes = [list(g) for g in grids]
+
+    # where each drawing's own strokes reached, vertically - the box may
+    # grow past this by GRID_GROW_PITCH and no further
+    limits = [[g[1] - grow, g[3] + grow] for g in grids]
+
+    def claims(index, region):
+        """Does drawing `index` own `region`?"""
+
+        box = boxes[index]
+
+        if not overlaps(region, box):
+            return False
+
+        top, bottom = limits[index]
+
+        centre = (region[1] + region[3]) / 2
+
+        return top <= centre <= bottom
+
+    claimed = [False] * len(lines)
+
+    changed = True
+
+    while changed:
+
+        changed = False
+
+        for index, line in enumerate(lines):
+
+            if claimed[index]:
+                continue
+
+            for position, box in enumerate(boxes):
+
+                if not claims(position, line["bbox"]):
+                    continue
+
+                claimed[index] = True
+
+                x1, y1, x2, y2 = line["bbox"]
+                box[0] = min(box[0], x1)
+                box[1] = min(box[1], y1)
+                box[2] = max(box[2], x2)
+                box[3] = max(box[3], y2)
+
+                changed = True
+                break
+
+    # two grids that grew into each other are one grid
+    merged = True
+
+    while merged:
+
+        merged = False
+
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                if not overlaps(boxes[i], boxes[j]):
+                    continue
+                boxes[i] = [min(boxes[i][0], boxes[j][0]),
+                            min(boxes[i][1], boxes[j][1]),
+                            max(boxes[i][2], boxes[j][2]),
+                            max(boxes[i][3], boxes[j][3])]
+                limits[i] = [min(limits[i][0], limits[j][0]),
+                             max(limits[i][1], limits[j][1])]
+                boxes.pop(j)
+                limits.pop(j)
+                merged = True
+                break
+            if merged:
+                break
+
+    kept = [line for index, line in enumerate(lines) if not claimed[index]]
+
+    for box in boxes:
+        kept.append({"bbox": [int(v) for v in box],
+                     "parts": 1, "tall": True, "grid": True})
+
+    kept.sort(key=lambda r: (r["bbox"][1], r["bbox"][0]))
+
+    return kept
 
 
 def group_blocks(lines, pitch):
@@ -475,6 +868,10 @@ def segment_page(path):
 
     boxes = find_regions(clean, pitch)
     lines = find_lines(boxes, pitch, rule_rows)
+
+    grids = find_grids(clean, pitch)
+    lines = merge_grids(lines, grids, pitch)
+
     blocks = group_blocks(lines, pitch)
 
     # what fraction of the handwriting ended up inside a line box -
@@ -493,6 +890,7 @@ def segment_page(path):
         "size": [int(gray.shape[1]), int(gray.shape[0])],
         "rule_pitch": round(pitch, 2),
         "rules_removed": int((rules > 0).sum()),
+        "grids": len(grids),
         "ink_pixels": total_ink,
         "ink_covered": round(inside / total_ink, 4) if total_ink else 0.0,
         "blocks": blocks,

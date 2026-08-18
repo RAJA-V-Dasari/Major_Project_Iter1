@@ -31,16 +31,20 @@ dataset/
 # Two depths, because modules differ in shape: 01_prepare holds
 # numbered sub-stages (modules/01_prepare/03_tone/output) while
 # 02_segment is flat (modules/02_segment/output).
+# check/ is 06_evaluation's registration renders - annotated real pages,
+# same reason as annotated/ and preview/.
 modules/*/input
 modules/*/output
 modules/*/preview
 modules/*/annotated
 modules/*/crops
+modules/*/check
 modules/*/*/input
 modules/*/*/output
 modules/*/*/preview
 modules/*/*/annotated
 modules/*/*/crops
+modules/*/*/check
 modules/01_prepare/students.csv
 
 # The annotation sample points at those same pages, and the review

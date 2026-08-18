@@ -12,7 +12,8 @@ pipeline that no longer exists on disk (see §5). Per-stage READMEs under
 `modules/*/` are accurate and are the place for detail; this file does not
 duplicate them.
 
-*State as of 2026-08-18.*
+*State as of 2026-08-18. `02_segment` regrouping and `06_evaluation`
+step 1 added the same day.*
 
 ---
 
@@ -29,7 +30,7 @@ modules/01_prepare/
     03_tone      flatten illumination, stretch ink to black
     v
 modules/02_segment/             blocks -> lines, geometry only, no labels
-    |                           33,577 line crops + manifest.csv
+    |                           25,167 line crops + manifest.csv
     v
 modules/03_router/  (pass 1)    text_ocr | diagram        [math_ocr = 0, by design]
     v
@@ -38,15 +39,17 @@ modules/04_ocr/                 TrOCR line recognition -> ocr.json
 modules/03_router/  (pass 2)    reroute_by_content(): text with '=' -> math_ocr
     v
 modules/05_math/                prepare -> engine -> LaTeX + page coordinates
-    v
-    ??  06_evaluation           DOES NOT EXIST — see §5, §6
+
+modules/06_evaluation/          scores 02_segment against annotation/
+                                step 1 of §6 only — nothing scores OCR yet
 ```
 
-Data moves through symlinks, not copies: each stage's `input/` points at
-the previous stage's output. Verified on disk:
+Data moves through links, not copies: each stage's `input/` points at
+the previous stage's output. On Windows these are directory junctions
+(`mklink /J`), which need no administrator rights. Verified on disk:
 
 ```
-01_deskew/input     real directory, currently EMPTY
+01_deskew/input  -> the raw normalised corpus (see §5)
 02_crop/input    -> ../01_deskew/output
 03_tone/input    -> ../02_crop/output
 02_segment/input -> ../01_prepare/03_tone/output
@@ -76,12 +79,43 @@ labelling effort feeding a YOLO11n detector (§3).
 | `01_prepare/01_deskew` | **working** | Hough over horizontally-opened ink; chosen over connected components and a rotation sweep after measuring all three. `output/` holds 62 entries from a prior run; `input/` is empty (§5). |
 | `01_prepare/02_crop` | **working** | Every page to one size — the 5th-percentile paper size across the corpus — anchored per page off the detected edge. |
 | `01_prepare/03_tone` | **working** | Divide by local background, then stretch. Removes bleed-through by exploiting sharpness, not brightness. Deliberately greyscale, never binarised. |
-| `02_segment` | **working, stable** | Block/line hierarchy, 37,966 regions → 33,577 crops (4,389 too small to hold a glyph, recorded with a reason rather than dropped). Emits **no labels**, deliberately. No stage README. |
+| `02_segment` | **working; regrouping fixed and measured** | Block/line hierarchy, 27,721 regions → 25,167 crops (2,554 too small to hold a glyph, recorded with a reason rather than dropped). Was 37,966 → 33,577 before descender absorption and drawn-grid merging: **8,410 fewer crops, ink coverage unchanged at 99.7%** (§2a). Emits **no labels**, deliberately. Stage README added. |
 | `03_router` | **working, math rules provisional** | Both passes run; 1.6s for the corpus; reading order re-derived and cross-checked against `02_segment` (0 of 1,231 pages disagree). `config.MATH_RULES_ARE_PROVISIONAL = True` — thresholds validated against 12 hand-written cases, never against real OCR output. |
 | `04_ocr` | **built; never run for real at scale** | `recognise.py` (TrOCR base, greedy, CPU) and `simulate.py` both satisfy `schema.py`'s contract. **The `ocr.json` currently on disk is `simulated: true`** (§4). A real full-corpus run is ~4.4 s/line ≈ 40 hours on this CPU. |
 | `05_math` | **exploratory** | Plumbing, rule-erasure front-end, expression splitting and page-coordinate geometry all verified. Two engines measured head to head; neither is good enough to ship. `output/` is currently absent — not run in this tree. |
 | `annotation/` | **labelled; training abandoned mid-run** | 112 of 120 sampled pages annotated, 409 boxes, 6 classes. A 150-epoch run stopped at **epoch 49** on 2026-08-15 (mAP50 0.478, mAP50-95 0.306 on 19 val images). Not consumed by any pipeline stage. |
-| `06_evaluation` | **does not exist** | Nothing anywhere measures correctness. §6. |
+| `06_evaluation` | **step 1 built; steps 2–4 not** | Registers `annotation/`'s boxes into prepared-page space and scores `02_segment` against them. The **first accuracy numbers in the repo** (§2a). Routing, OCR and maths are still unmeasured — they need a transcribed set that does not exist. |
+
+### 2a. The one place accuracy is now measured
+
+`modules/06_evaluation` maps `annotation/`'s hand-drawn boxes into the
+coordinate space the pipeline runs in — they were in the raw 1700×2338
+space and no stage could read them — and scores `02_segment` against
+them. 33 annotated content pages, 126 boxes.
+
+| Class | Boxes | Fragments/box before | after | Ink recall |
+|---|---|---|---|---|
+| paragraph | 68 | 4.56 | **3.85** | 99.9% |
+| math | 38 | 6.79 | **4.61** | 99.8% |
+| figure | 13 | 8.31 | **3.23** | 99.9% |
+| code | 5 | 4.00 | **3.80** | 99.7% |
+| table | 1 | 10.00 | **1.00** | 100.0% |
+
+Two causes, both measured rather than guessed. **Descenders**: the line
+snap is a baseline test and a descender has not got its word's baseline,
+so 90% of unsnapped components were descenders emitted as their own crop
+— 25% of every region the stage produced. **Drawn grids**: a table's cell
+borders lie along the printed rules, so each row snapped like a line of
+writing.
+
+Ink coverage did not move, which is the point — this is regrouping, not
+discarding.
+
+**Caveat on the sample.** Only 40 of the 112 annotated pages can be
+scored, because registration needs the raw page too and only students
+01–20 of the raw corpus are on disk. Syncing the rest would take this to
+~105 pages / ~380 boxes at zero annotation cost — the cheapest
+improvement available anywhere on this list.
 
 ### What the numbers in the READMEs are
 
@@ -159,15 +193,28 @@ under a `preprocessing/` directory. That directory does not exist.
 `annotation/README.md` references `preprocessing/output/` throughout, for
 the same reason. A new contributor following either one gets nowhere.
 
-**There is no way to get data into the pipeline.** `01_deskew/input/` is
-empty, and nothing in `modules/` writes to it. The step that populated it
-was `convert_dataset.py` — normalising a mix of per-page PDFs, multi-page
-PDFs and loose PNGs into `student_NN/cie_C/page_PP.png` — and it went
-away with `preprocessing/`. `dataset/` already holds that normalised tree
-locally, so the missing piece is small, but until it exists the pipeline
-cannot be re-run from scratch by anyone.
+**There is still no ingestion step in the repo.** Nothing in `modules/`
+writes `01_deskew/input/`. The step that populated it was
+`convert_dataset.py` — normalising a mix of per-page PDFs, multi-page PDFs
+and loose PNGs into `student_NN/cie_C/page_PP.png` — and it went away with
+`preprocessing/`. Recover it from git history rather than rewriting.
 
-**Nothing is measured.** See §6.
+The stages are currently fed by junction, from a local corpus copy outside
+the repo:
+
+```
+01_prepare/01_deskew/input  ->  <corpus>/output    raw normalised, 1700x2338
+                                                   students 01-20 only, 535 pages
+01_prepare/03_tone/output   ->  <corpus>/cleaned   prepared, 1598x2177, 1384 pages
+02_segment/input            ->  01_prepare/03_tone/output
+```
+
+`cleaned/` is complete and is what `02_segment` runs on. `output/` (raw) is
+partial, and that is what limits `06_evaluation` to 40 of 112 annotated
+pages — see §2a.
+
+**Almost nothing is measured.** `02_segment` now is (§2a). The router,
+OCR and maths are not. See §6.
 
 **No automated tests, anywhere.** Verification is ad hoc CLI flags —
 `--preview`, `--verify`, `--check`, `--dry-run` — plus
@@ -191,15 +238,20 @@ docstrings only.
 
 ## 6. Evaluation — the missing module
 
-There is no `06_evaluation`, and nothing else fills the role.
-`annotation/evaluate.py` scores the YOLO layout detector against its own
-val split; that is the only scoring code in the repo, and it measures a
-model that no pipeline stage uses.
+**Step 1 is built** — `modules/06_evaluation` scores `02_segment` against
+`annotation/` and produced the numbers in §2a. Routing, OCR accuracy,
+maths accuracy and end-to-end reconciliation are still missing, so every
+improvement proposed for those in §7 remains unfalsifiable.
 
-So: no measurement of segmentation quality, routing correctness, OCR
-accuracy, maths accuracy, or end-to-end output. Every improvement
-proposed in §7 is currently unfalsifiable — there is no number that would
-move.
+A finding from building it that changes §P2: **no classical signal
+separates a hand-drawn figure from prose in this corpus.** Ink whose
+baseline snaps to a rule is 98% inside figure boxes against 100% inside
+paragraphs; tall-component mass is 0.00 for both; density 0.031 against
+0.066. Students rest diagrams on the rules exactly as they rest writing.
+Merging drawn structure works anyway — it only asks whether two pieces
+belong to one drawn object — but *classifying* a figure needs a learned
+model. That is the one place on this roadmap where more labels are
+genuinely the answer.
 
 Proposed `modules/06_evaluation/`, in build order. Each reuses ground
 truth that exists or is already planned, rather than opening a new
@@ -228,7 +280,10 @@ a fine-tune.
 prints today become checks that fail loudly. Cheap, and it turns the
 existing reconciliation discipline into a regression test.
 
-Build 1 first: it needs no new labelling and it scores two stages.
+Build 1 first: it needs no new labelling and it scores two stages. **Its
+layout half is now built** — see §2a. Its routing half is not: scoring
+`03_router` needs the destination a human would have chosen, which the
+`figure`/`table` classes give for two destinations only.
 
 ---
 
@@ -247,8 +302,14 @@ Build 1 first: it needs no new labelling and it scores two stages.
 
 ### P1 — measure, then improve
 
-- **`06_evaluation` step 1** (layout + routing vs. existing annotations).
-  Nothing else on this list can be judged without it.
+- ~~**`06_evaluation` step 1**, layout half~~ — **done**, §2a.
+- **Sync the rest of the raw corpus.** Registration needs the raw page as
+  well as the prepared one, and only students 01–20 are on disk, so 40 of
+  112 annotated pages can be scored. Copying the rest of the raw tree
+  triples the ground truth at zero annotation cost. Highest
+  value-per-effort item on this list.
+- **`06_evaluation` routing half** — score `03_router` against the
+  `figure`/`table` boxes now that they are in the right space.
 - **A real `04_ocr` run.** Even a few booklets end to end with
   `simulated: false` would replace the synthetic chain in §4 and let the
   provisional maths thresholds meet real text for the first time.
@@ -277,13 +338,43 @@ Build 1 first: it needs no new labelling and it scores two stages.
 
 ### P2 — decide the annotation track's purpose
 
-Either finish it and wire it in — complete the 150-epoch run, label the
-remaining 8 pages, bootstrap the other ~1265 pages with `pseudo_label.py`,
-and use the detector to supply `02_segment`'s missing labels and route
-tables/figures away before `05_math` — or shelve it explicitly and say so
-in its README. Right now it is a substantial, half-finished effort that
-no other stage depends on, and the repo does not say which it is meant to
-be.
+The question has narrowed. Two of the three jobs this track was meant to
+do no longer need it:
+
+- **Supplying `02_segment`'s missing labels** — not needed to fix
+  fragmentation. That was algorithmic (§2a) and cost no labels at all.
+- **Routing tables away** — `02_segment` now merges drawn grids, and
+  93% of tables carry the strokes that identify them against 1% of
+  paragraphs.
+
+What is left genuinely does need labels: **a figure detector**, for
+diagrams drawn without straight strokes. No classical signal finds those
+(§6).
+
+**1,300 pages of box-drawing is the wrong way to get it.** The geometry is
+already 99.8% right, so a human does not need to *draw* anything — only
+to *name* what is already drawn. That changes the unit of work from
+"minutes per page in CVAT" to "one keypress per region", and it changes
+how many pages you must touch, because what a classifier needs is enough
+*regions*, not enough pages.
+
+And the regions can be pre-selected. `02_segment` flags the ones it merged
+as drawn structure, and those are measurably **9.5× enriched for
+`figure`** — 41% of grid-flagged regions fall in a human `figure` box
+against 4.3% of the rest, while `paragraph` is 5× depleted. Labelling
+flagged regions first buys figure examples an order of magnitude faster
+than sampling pages at random, which is how the current 27 figures in 112
+pages came about.
+
+Concretely: ~200 pages at ~22 regions each is ~4,400 regions, of which
+the flagged subset can be labelled first. That is hours, not weeks, and it
+covers more pages than the existing 112. Then bootstrap the remainder with
+`pseudo_label.py`, which already exists.
+
+The alternative remains to shelve the track explicitly and say so in its
+README. What should not continue is the current state: a substantial,
+half-finished effort no stage depends on, with the repo silent on which it
+is meant to be.
 
 ### P2 — engineering hygiene
 
@@ -318,11 +409,12 @@ Major_Project_Iter1/
             02_crop/        src/{crop,grid,measure,cover_template}.py
             03_tone/        src/tone.py
             publish_dataset.py
-        02_segment/         src/{segment,crop_lines}.py
+        02_segment/         README.md  src/{segment,crop_lines}.py
         03_router/          README.md  src/{config,rules,route,reroute}.py
         04_ocr/             README.md  src/{schema,recognise,simulate}.py
         05_math/            README.md  requirements.txt
                             src/{prepare,math_ocr}.py  src/engines/{null,sumen,trocr}.py
+        06_evaluation/      README.md  src/{register,score_layout}.py
     annotation/             README.md  LABELING_GUIDE.md  manifest.csv
                             sample/preannotate/validate/build/train/evaluate/pseudo_label
                             labels/                          [tracked — geometry only]
