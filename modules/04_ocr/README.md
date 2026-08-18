@@ -1,4 +1,4 @@
-# 03_ocr
+# 04_ocr
 
 Two things can write `output/ocr.json`, and **you must check which one
 did** before trusting a word of it. The `simulated` flag says so:
@@ -30,43 +30,41 @@ did** before trusting a word of it. The `simulated` flag says so:
 Pipeline position:
 
 ```
-01_prepare -> 02_segment -> module2_router -> 03_ocr -> (answer extraction, ...)
+01_prepare -> 02_segment -> 03_router -> 04_ocr -> (answer extraction, ...)
 ```
 
-03_ocr does not read the corpus directly. It reads what **Module 2
+04_ocr does not read the corpus directly. It reads what **Module 2
 routed to the `ocr` processor** — equations go to `math_ocr`, figures to
 `diagram_parser`, and this stage deliberately leaves them alone.
 
 ## Layout
 
 ```
-03_ocr/
+04_ocr/
     input/   -> symlink to 02_segment/crops   (33,577 line images + manifest.csv)
     src/
         schema.py            the contract: dataclasses + validate_run()
-        simulate_router.py   stands in for Module 2 -> routed_regions.json
         recognise.py         REAL recognition (TrOCR) -> ocr.json
         simulate.py          fills the contract with synthetic text
     output/
-        router_input.json    what Module 2 was handed
-        routed_regions.json  what Module 2 emitted; the input to recognise.py
         ocr.json             full nested payload (pages -> lines)
         lines.csv            same data flat, for joins and quick greps
         transcripts/         one .txt per booklet, in reading order
 ```
 
 `output/` holds generated artefacts only, and is gitignored by
-`modules/*/output`. The two routed files live there rather than under
-`input/` because they are produced here, not received — `input/` is the
-symlink to 02_segment's crops, which `simulate.py` also reads.
+`modules/*/output`. The routed input is **not** produced here — it is
+read from `03_router/output/routed_regions.json`, the real router's
+output. `input/` is the symlink to 02_segment's crops, which supplies
+the images.
 
 ## Running it
 
 ```bash
-cd modules/03_ocr/src
+cd modules/04_ocr/src
 
-python simulate_router.py            # booklet s01_c1 -> routed_regions.json
-python simulate_router.py --student 5 --cie 2
+cd ../../03_router/src && python route.py   # the real router, 1.6s
+cd -
 
 python recognise.py --limit 20       # a quick look
 python recognise.py                  # every ocr-routed line in that booklet
@@ -85,10 +83,10 @@ alternative here: it ships a `sentencepiece.bpe.model` and would need
 
 ```python
 import json, sys
-sys.path.insert(0, "modules/03_ocr/src")
+sys.path.insert(0, "modules/04_ocr/src")
 import schema
 
-payload = json.load(open("modules/03_ocr/output/ocr.json"))
+payload = json.load(open("modules/04_ocr/output/ocr.json"))
 
 schema.validate_run(payload)        # raises with a specific reason if malformed
 
@@ -178,26 +176,26 @@ reason rather than dropped.
 Deterministic: each line is seeded from its own `line_uid`, so reruns
 are byte-identical and two machines agree.
 
-## Where the input comes from — `simulate_router.py`
+## Where the input comes from — `03_router`
 
-Module 2 has never been run against this corpus: its input is a
-four-region hand-written sample, and the classifier that would label
-real regions does not exist. `simulate_router.py` bridges that.
+`recognise.py` reads `03_router/output/routed_regions.json`: a **real**
+routing decision over the whole corpus, not a simulation. Run
+`03_router/src/route.py` first (1.6s).
 
-It is **not** a reimplementation. It builds Module 2's *input* from real
-02_segment geometry, then imports and runs the actual `RegionRouter` —
-the real `validate()`, `sort_regions()` and `route()` against the real
-`ROUTING_TABLE`. Ordering, the discard threshold and the
-label→processor mapping are therefore Module 2's behaviour, and they
-change when it changes.
+Of 33,577 regions it routes 33,229 to `ocr` and 348 to
+`diagram_parser`. **Nothing is routed to `math_ocr` before
+recognition**, deliberately: separating equations from prose by
+geometry was measured on 600 crops and rejected — ink density,
+inter-symbol gap, component-size variation and aspect ratio are all
+unimodal, so any threshold would be invented. Maths is identified
+*after* recognition, from the text, via
+`03_router/src/rules.py::reroute_by_content()`.
 
-One field is synthetic: `label`, and the `confidence` attached to it.
-Segmentation is geometry-only, so a region's class has to be guessed
-from its shape until the classifier lands. A region typed `equation`
-here is not really an equation — it is a line whose shape made the
-heuristic say so.
-
-**So: do not measure classification or routing accuracy against this.**
+This replaced an earlier `simulate_router.py`, which invented a
+`label` and `confidence` per region to drive the old label-based
+`module2_router`. That router has been removed: it keyed on labels
+this pipeline does not produce and dropped regions below a confidence
+that does not exist. See `03_router/README.md`.
 What it is good for is the plumbing — proving the recogniser takes only
 what was routed to it and leaves math_ocr's and diagram_parser's
 regions alone. A typical booklet routes to `ocr=134, math_ocr=12,

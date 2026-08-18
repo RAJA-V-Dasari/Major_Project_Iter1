@@ -1,7 +1,7 @@
 """
 The OCR output contract.
 
-This is the single definition of what 03_ocr emits, and therefore of
+This is the single definition of what 04_ocr emits, and therefore of
 what anything downstream may rely on. It is deliberately separate from
 both the simulator and the real engine so that the two cannot drift:
 simulate.py fills these records with synthetic text, the real engine

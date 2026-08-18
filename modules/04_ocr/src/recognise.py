@@ -1,9 +1,9 @@
 """
 Read the handwriting. Real recognition, not simulation.
 
-    03_ocr/output/routed_regions.json  (what Module 2 sent to `ocr`)
-    03_ocr/input/                      (the line crops)
-        -> 03_ocr/output/  ocr.json, lines.csv, transcripts/
+    03_router/output/routed_regions.json  (what the router sent to `ocr`)
+    04_ocr/input/                      (the line crops)
+        -> 04_ocr/output/  ocr.json, lines.csv, transcripts/
 
 This is the engine simulate.py was a placeholder for. It emits exactly
 the same records - schema.LineResult - but with `simulated: false` and
@@ -75,7 +75,8 @@ MODULES_DIR = STAGE_DIR.parent
 CROP_DIR = STAGE_DIR / "input"
 
 OUT_DIR = STAGE_DIR / "output"
-ROUTED_PATH = OUT_DIR / "routed_regions.json"
+# The REAL router's output (03_router), not a simulation of it.
+ROUTED_PATH = MODULES_DIR / "03_router" / "output" / "routed_regions.json"
 TRANSCRIPT_DIR = OUT_DIR / "transcripts"
 
 SEGMENTATION_PATH = MODULES_DIR / "02_segment" / "output" / "segmentation.json"
@@ -282,7 +283,7 @@ def main():
 
     if not args.routed.exists():
         raise SystemExit(
-            f"{args.routed} not found - run simulate_router.py first"
+            f"{args.routed} not found - run 03_router/src/route.py first"
         )
 
     routed = json.load(open(args.routed))

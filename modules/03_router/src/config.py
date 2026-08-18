@@ -40,6 +40,18 @@ SHORT_HEIGHT_PITCH = 0.55
 LONG_WIDTH_PITCH = 6.0
 
 
+# --- downstream compatibility ---------------------------------------
+# 03_ocr reads a `processor` string, using the vocabulary the old
+# label-based router used. Routes are named for what they are; these
+# are what the consumer expects to see.
+PROCESSOR_NAMES = {
+    TEXT_OCR: "ocr",
+    MATH_OCR: "math_ocr",
+    DIAGRAM: "diagram_parser",
+    REVIEW: "manual_review",
+}
+
+
 # --- content re-routing ---------------------------------------------
 # THIS is where math is actually identified - after recognition, from
 # the text, not before it from the pixels. See rules.py for why.

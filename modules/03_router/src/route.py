@@ -208,6 +208,42 @@ def main():
     with open(OUT_DIR / "routed.json", "w") as handle:
         json.dump(payload, handle, indent=1)
 
+    # 04_ocr reads this shape: pages -> regions, each carrying the
+    # `processor` string it filters on. Emitted here so the recogniser
+    # consumes a REAL routing decision rather than a simulated one.
+    #
+    # `page` is the page_id string, not the page number. The number
+    # collides - student_01 page 2 and student_02 page 2 are both 2 -
+    # and the consumer groups regions by this key, so an int would
+    # merge 61 students' page 2 into one bucket and then label the
+    # whole bucket with whichever student happened to sort first.
+    # A unique key removes that failure by construction.
+    compat = {"pages": []}
+
+    for page in pages:
+        compat["pages"].append({
+            "page": page["page_id"],
+            "regions": [
+                {
+                    "id": region["line_uid"],
+                    "page": page["page_id"],
+                    "bbox": {"x1": region["x1"], "y1": region["y1"],
+                             "x2": region["x2"], "y2": region["y2"]},
+                    "crop_path": region["crop"],
+                    "processor": config.PROCESSOR_NAMES[region["route"]],
+                    "reading_order": region["reading_order"],
+                    "ignored": False,
+                    "metadata": {"route": region["route"],
+                                 "reason": region["reason"],
+                                 "tags": region["tags"]},
+                }
+                for region in page["regions"]
+            ],
+        })
+
+    with open(OUT_DIR / "routed_regions.json", "w") as handle:
+        json.dump(compat, handle, indent=1)
+
     with open(OUT_DIR / "routed.csv", "w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["line_uid", "page_id", "student", "cie", "page",

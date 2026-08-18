@@ -1,8 +1,8 @@
 """
 Produce SYNTHETIC OCR results in the real output shape.
 
-    03_ocr/input/  (the line crops + manifest)
-        -> 03_ocr/output/  ocr.json, lines.csv, transcripts/
+    04_ocr/input/  (the line crops + manifest)
+        -> 04_ocr/output/  ocr.json, lines.csv, transcripts/
 
 WHY SIMULATE AT ALL
 -------------------
