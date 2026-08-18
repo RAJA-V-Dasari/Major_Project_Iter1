@@ -35,10 +35,12 @@ modules/*/input
 modules/*/output
 modules/*/preview
 modules/*/annotated
+modules/*/crops
 modules/*/*/input
 modules/*/*/output
 modules/*/*/preview
 modules/*/*/annotated
+modules/*/*/crops
 modules/01_prepare/students.csv
 
 # The annotation sample points at those same pages, and the review
