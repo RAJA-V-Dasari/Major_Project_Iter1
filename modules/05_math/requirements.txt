@@ -1,0 +1,29 @@
+# Module 05 - Math OCR
+#
+# Installed into the repo-root .venv, which every module shares:
+#
+#     uv pip install --python .venv/bin/python -r modules/05_math/requirements.txt
+#
+# torch is CPU-only on this machine and there is no GPU, which is
+# what sets the pace of this stage: ~5-10s per expression. Nothing
+# here needs CUDA.
+
+# Preparation: rule suppression, expression splitting, previews.
+opencv-python>=4.10.0
+numpy>=1.26.0
+
+# Engines. transformers pulls tokenizers and safetensors; the model
+# weights themselves are fetched from the Hugging Face hub on first
+# run and cached in ~/.cache/huggingface (1.4GB for sumen-base,
+# 1.3GB for trocr-base-handwritten).
+#
+# transformers 5.x is required rather than merely allowed: the 4.x
+# line pins huggingface-hub<1.0, and installing it downgrades the
+# hub client the dataset tooling in this repo uses.
+transformers>=5.0.0
+torch>=2.0.0
+pillow>=10.0.0
+
+# Only needed to run the engines offline against an already-cached
+# model, and to fetch them in the first place.
+huggingface-hub>=1.0.0
