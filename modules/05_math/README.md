@@ -150,7 +150,10 @@ powers and base conversion — `header len = 6x4 = 24 bytes`, `(0038)_16`
 model buys layout and pays in handwriting; a handwriting model buys the
 pen and pays by flattening every superscript.
 
-`0 empty, 0 errors, mean confidence 0.59.`
+`0 empty, 0 errors, 122s (~2.7s/expression), mean confidence 0.59.`
+
+It is also **5× faster** than sumen on identical images — 122s against
+643s for the same 46 expressions — which matters on a CPU-only machine.
 
 **The control wins, and it is not close.** Both engines on the same 19
 prepared expressions of `student_01/cie_1`, ground truth read off the
