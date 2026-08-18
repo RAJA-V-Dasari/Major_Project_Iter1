@@ -80,7 +80,7 @@ def routed_regions():
 
     if not ROUTED_DIR.exists():
         raise SystemExit(
-            f"{ROUTED_DIR} not found - run simulate_router.py first "
+            f"{ROUTED_DIR} not found - run 03_router/src/reroute.py first "
             "(or point the real router's output here)"
         )
 
@@ -247,7 +247,7 @@ def main():
         regions = regions[:args.limit]
 
     if not regions:
-        raise SystemExit("nothing routed to math_ocr - run simulate_router.py")
+        raise SystemExit("nothing routed to math_ocr - run 03_router/src/reroute.py")
 
     print(
         f"{len(regions)} regions routed to {PROCESSOR}, "

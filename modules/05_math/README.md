@@ -16,47 +16,50 @@ the point of this branch — they say what to build next.
 
 ---
 
-## 1. The router hand-off is simulated
+## 1. The router hand-off is real
 
-The real router is `modules/module2_router`. It routes on a **label** —
-its `ROUTING_TABLE` sends `equation` to `math_ocr`, `paragraph` to `ocr`.
-`02_segment` emits **no labels at all**: it reports where content is,
-never what it is, because there was no training data to justify the
-claim.
+`03_router` addresses regions to `math_ocr`, and this stage reads them
+from `input/routed/` (a symlink to `03_router/output/after_ocr/`), one
+file per booklet. There is no simulated router here any more — the
+earlier `src/simulate_router.py` invented a label per region to drive
+the old label-based `module2_router`, and both have been removed.
 
-So the hand-off cannot happen yet, and `src/simulate_router.py` stands in
-for it. It writes exactly the router's schema, so when a classifier lands
-this file is deleted and the router's own output is pointed here
-unchanged.
+**The routing happens *after* recognition, not before it.** That is the
+one thing to understand about this input:
+
+```
+02_segment -> 03_router -> 04_ocr -> 03_router (reroute) -> 05_math
+```
+
+Separating equations from prose by looking at the crop was measured on
+600 real regions and rejected: ink density, inter-symbol gap over line
+height, component-size variation and aspect ratio are all **unimodal**,
+so any threshold would be an invented boundary, and the corpus has no
+labelled maths to validate one against. This is the same reason
+`02_segment` emits no labels at all.
+
+After recognition the question is easy, because `=` is a character you
+can read rather than a property inferred from ink statistics. So a line
+goes to the text recogniser first even when it turns out to be an
+equation. That wastes one recognition per equation, which is cheap, and
+buys not having to guess.
+
+A line is re-routed when it carries an operator **and** an operand
+**and** is mostly non-alphabetic, or contains a word like `mod`. The
+operand condition earns its place: without it a bare `=`, `*` or `->`
+scores as 100% non-alphabetic and sails through — 38% of the first
+run's re-routed regions were exactly that, isolated operators and
+arrows rather than expressions.
 
 | | |
 |---|---|
-| **Real** | The images. Every crop is a genuine line region cut by `02_segment/crop_lines.py` at its true page coordinates. |
-| **Invented** | The label, and therefore the routing. Every region carries `metadata.simulated = true` so no measurement downstream can quietly credit it as real. |
-| **Invented** | The router's `confidence` values. They are synthesised from how many signals fired — not a model's posterior. |
+| **Real** | The images, the page coordinates, the routing decision, and the text it was made from. |
+| **As good as its text** | The maths detection reads whatever the recogniser produced. Run against `04_ocr/src/simulate.py` the text is synthetic, so the maths found is too — the payload carries `from_simulated_ocr` to say which. |
 
-It guesses a line is maths from two structural signals, chosen because
-they survive bad handwriting and need no character reading:
-
-- **an equals sign** — two *short* flat strokes, stacked and aligned;
-- **superscripts** — small components riding high **in their own
-  column**, with a full-height base to the left.
-
-Both took real tuning against the corpus, and the failures are
-instructive:
-
-| Rule as first written | What happened | Fix |
-|---|---|---|
-| any small high component is a superscript | i-dots and the tittles of a cursive hand fired on nearly every line of prose | require clear paper below it — a dot has its stem underneath, an exponent does not |
-| one superscript is enough | 140 of 377 routed regions came in on a lone superscript, e.g. `client - server architecture` | require two on a short line |
-| any two stacked flat strokes are `=` | a student's underline paired with a surviving rule fragment routed every underlined heading | an `=` is also *short* (≤1.8 x-heights) and its bars are of similar length |
-| page width = `size[1]` | `size` is `[width, height]`, so every line was measured against 2177px instead of 1598 and prose looked "short" | `size[0]` |
-
-Measured after those fixes, on six booklets: **1646 regions, 267 routed
-to `math_ocr` (16.2%)**. Eyeballing the review sheets, roughly **3 in 4**
-are genuinely mathematics; the rest are boxed table rows and
-sequence-diagram fragments, which want `table_parser` and
-`diagram_parser` — processors this simulation does not attempt.
+The detection rules are marked provisional in `03_router/src/config.py`:
+there is no labelled maths in this corpus to tune them against, so they
+are a documented starting point to be measured once real recognition
+output exists.
 
 ---
 
@@ -197,7 +200,7 @@ two-dimensional minority. Both are still too weak to ship untouched.
 ```bash
 cd modules/05_math/src
 
-python simulate_router.py --booklets 6 --review   # stand in for the router
+cd ../../03_router/src && python reroute.py   # real router, post-OCR
 python prepare.py --preview                       # check the front-end alone
 
 python math_ocr.py --engine none                  # plumbing, no model, seconds
@@ -252,7 +255,9 @@ work.
    `2^{m-1}`-style targets would fix. The bottleneck is the model, not
    the plumbing. Prepared expressions plus hand-transcribed targets are
    the dataset, and this stage already emits the images.
-2. **Replace `simulate_router.py` with a real classifier.** Labelling a
+2. **Sharpen the maths detection.** It now runs on recognised text
+   (`03_router/src/rules.py`), but its thresholds are provisional and
+   untested against real OCR output. Labelling a
    few hundred line crops `equation` / `paragraph` / `diagram` / `table`
    would beat these heuristics and unblock the other processors too.
 3. **Find a signal that separates a good reading from a fabricated one.**

@@ -111,6 +111,15 @@ def looks_like_maths(text):
     if not has_operator:
         return False, "no relational or arithmetic operator present"
 
+    # An expression needs something to operate ON. Without this, a bare
+    # "=", "*" or "->" scores as 100% non-alphabetic and sails through
+    # as mathematics - 38% of everything re-routed on the first run was
+    # exactly that: isolated operators and arrows, which are a
+    # diagram's furniture or a fragment of a line, not an equation for
+    # a formula recogniser to read.
+    if not any(c.isalnum() for c in stripped):
+        return False, "operator with no operand - a symbol, not an expression"
+
     non_alpha = sum(1 for c in stripped if not c.isalpha())
 
     ratio = non_alpha / len(stripped)
