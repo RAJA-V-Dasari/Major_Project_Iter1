@@ -1,6 +1,0 @@
-output/
-__pycache__/
-
-# Scanned answer-sheet pages contain personal student data; must not
-# enter git history (see root .gitignore).
-input/pages/
