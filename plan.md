@@ -12,8 +12,8 @@ pipeline that no longer exists on disk (see §5). Per-stage READMEs under
 `modules/*/` are accurate and are the place for detail; this file does not
 duplicate them.
 
-*State as of 2026-08-18. `02_segment` regrouping and `06_evaluation`
-step 1 added the same day.*
+*State as of 2026-08-21. `02_segment` regrouping and `06_evaluation`
+step 1 added 2026-08-18; `07_reconstruct` added 2026-08-21.*
 
 ---
 
@@ -42,6 +42,10 @@ modules/05_math/                prepare -> engine -> LaTeX + page coordinates
 
 modules/06_evaluation/          scores 02_segment against annotation/
                                 step 1 of §6 only — nothing scores OCR yet
+
+modules/07_reconstruct/         02_segment's pitch, source pages -> one PNG
+                                per booklet, cut at question marks — review
+                                artefact, not an OCR pipeline stage
 ```
 
 Data moves through links, not copies: each stage's `input/` points at
@@ -85,6 +89,7 @@ labelling effort feeding a YOLO11n detector (§3).
 | `05_math` | **exploratory** | Plumbing, rule-erasure front-end, expression splitting and page-coordinate geometry all verified. Two engines measured head to head; neither is good enough to ship. `output/` is currently absent — not run in this tree. |
 | `annotation/` | **labelled; training abandoned mid-run** | 112 of 120 sampled pages annotated, 409 boxes, 6 classes. A 150-epoch run stopped at **epoch 49** on 2026-08-15 (mAP50 0.478, mAP50-95 0.306 on 19 val images). Not consumed by any pipeline stage. |
 | `06_evaluation` | **step 1 built; steps 2–4 not** | Registers `annotation/`'s boxes into prepared-page space and scores `02_segment` against them. The **first accuracy numbers in the repo** (§2a). Routing, OCR and maths are still unmeasured — they need a transcribed set that does not exist. |
+| `07_reconstruct` | **new; validated on one student** | One PNG per booklet, cut at question boundaries found by margin-crossing marks rather than by re-stitching `02_segment`'s line/block geometry — sidesteps that geometry's diagram fragmentation entirely by cropping the raw page band instead. Built and checked by eye against `student_01`'s three CIEs only; not yet run corpus-wide. See its README. |
 
 ### 2a. The one place accuracy is now measured
 
@@ -415,6 +420,7 @@ Major_Project_Iter1/
         05_math/            README.md  requirements.txt
                             src/{prepare,math_ocr}.py  src/engines/{null,sumen,trocr}.py
         06_evaluation/      README.md  src/{register,score_layout}.py
+        07_reconstruct/     README.md  src/reconstruct.py
     annotation/             README.md  LABELING_GUIDE.md  manifest.csv
                             sample/preannotate/validate/build/train/evaluate/pseudo_label
                             labels/                          [tracked — geometry only]
