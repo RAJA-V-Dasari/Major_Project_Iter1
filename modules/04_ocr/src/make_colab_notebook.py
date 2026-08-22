@@ -107,10 +107,29 @@ for p in imgs[:10]: print('  ', p.name)
 
 `3B` is comfortable on a T4 and fast. `7B` is more accurate but needs
 4-bit to fit — try 3B first and only move up if the score demands it.
+
+**The pixel budget is set on the PROCESSOR here, and that is the part
+that matters.** Qwen's default cap is 16384 image patches. A
+1598x2177 scan is 3.48M pixels, which at 28x28 patches is ~4,400
+visual tokens, and attention over 4,400 tokens is what asks a T4 for
+18.85 GiB and dies. Capping at 1024 patches resizes the page to ~800k
+pixels first, which is ~19x less attention memory and still well above
+what this handwriting needs to stay legible.
+
+Setting it on the processor makes it apply no matter how the image is
+passed in later. Putting the same numbers only inside the chat message
+does NOT: the message is a template, and a raw PIL image handed
+straight to `processor(images=...)` sails past it.
 """),
     code("""
 MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"   # or "Qwen/Qwen2.5-VL-7B-Instruct"
 FOUR_BIT = False                         # set True for the 7B on a T4
+
+# in 28x28 patches. Lower MAX_PATCHES if you still hit OOM.
+MIN_PATCHES, MAX_PATCHES = 256, 1024
+
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import torch
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
@@ -122,8 +141,16 @@ if FOUR_BIT:
         load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
 
 model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL, **kw)
-processor = AutoProcessor.from_pretrained(MODEL)
+model.eval()
+
+processor = AutoProcessor.from_pretrained(
+    MODEL,
+    min_pixels=MIN_PATCHES * 28 * 28,
+    max_pixels=MAX_PATCHES * 28 * 28,
+)
+
 print('loaded', MODEL)
+print('max visual tokens per image:', MAX_PATCHES)
 """),
 
     md("## 5. The prompt"),
@@ -132,48 +159,86 @@ print('loaded', MODEL)
     md("""
 ## 6. Read every page
 
-`min_pixels` / `max_pixels` matter: too small and the handwriting is
-unreadable, too large and a T4 runs out of memory on a 1598x2177 scan.
+`process_vision_info` is what actually resizes the image to the
+processor's pixel budget. Passing a raw PIL image to
+`processor(images=...)` skips that step, which is how a page becomes
+~4,400 visual tokens and asks for 18.85 GiB.
+
+A page that still OOMs is retried once at half the patch budget rather
+than being lost, and the message says so - a page silently written as
+an empty file would score as a total miss and look like a reading
+failure rather than a memory one.
 """),
     code("""
-import time, pathlib
+import time, pathlib, gc
 from PIL import Image
+from qwen_vl_utils import process_vision_info
 
 OUT = pathlib.Path('/content/markdown'); OUT.mkdir(exist_ok=True)
 
-MIN_PX, MAX_PX = 512*28*28, 1280*28*28
-
-def read(path):
+def read(path, max_patches=MAX_PATCHES):
     image = Image.open(path).convert('RGB')
+
     messages = [{"role": "user", "content": [
         {"type": "image", "image": image,
-         "min_pixels": MIN_PX, "max_pixels": MAX_PX},
+         "min_pixels": MIN_PATCHES * 28 * 28,
+         "max_pixels": max_patches * 28 * 28},
         {"type": "text", "text": PROMPT}]}]
 
     text = processor.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True)
-    inputs = processor(text=[text], images=[image],
-                       return_tensors="pt").to(model.device)
+
+    # THIS is the resize step. Without it the pixel budget is ignored.
+    image_inputs, _ = process_vision_info(messages)
+
+    inputs = processor(text=[text], images=image_inputs,
+                       padding=True, return_tensors="pt").to(model.device)
+
+    tokens = int(inputs.input_ids.shape[1])
 
     with torch.no_grad():
         out = model.generate(**inputs, max_new_tokens=1536, do_sample=False)
 
-    trimmed = out[0][inputs.input_ids.shape[1]:]
-    return processor.decode(trimmed, skip_special_tokens=True).strip()
+    trimmed = out[0][tokens:]
+    body = processor.decode(trimmed, skip_special_tokens=True).strip()
+
+    del inputs, out
+    return body, tokens
 
 t0 = time.time()
+failed = []
+
 for i, p in enumerate(imgs, 1):
     started = time.time()
-    try:
-        body = read(p)
-    except Exception as e:
-        body = ''
-        print(f'  {p.name}: FAILED {e}')
+    body, tokens = '', 0
+
+    for attempt, budget in enumerate([MAX_PATCHES, MAX_PATCHES // 2]):
+        try:
+            body, tokens = read(p, budget)
+            if attempt:
+                print(f'    (recovered at {budget} patches)')
+            break
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache(); gc.collect()
+            if attempt:
+                failed.append(p.stem)
+                print(f'  {p.stem}: OOM even at {budget} patches')
+        except Exception as e:
+            failed.append(p.stem)
+            print(f'  {p.stem}: FAILED {type(e).__name__}: {e}')
+            break
+
     (OUT / (p.stem + '.md')).write_text(body, encoding='utf-8')
     print(f'[{i}/{len(imgs)}] {p.stem}  {len(body)} chars  '
-          f'{time.time()-started:.0f}s', flush=True)
+          f'{tokens} in-tokens  {time.time()-started:.0f}s', flush=True)
+
+    torch.cuda.empty_cache(); gc.collect()
 
 print(f'\\nTotal {time.time()-t0:.0f}s')
+if failed:
+    print(f'FAILED ({len(failed)}): {failed}')
+else:
+    print('all pages read')
 """),
 
     md("## 7. Spot-check one before downloading everything"),
