@@ -120,25 +120,59 @@ marks. They are already excluded by `07_reconstruct`, but check your zip.
 """),
 
     md("""
-## 3. Upload your pages
+## 3. Get the pages in
 
-Zip the images first. Filenames become the output names, so use the
-page ids the benchmark expects, e.g. `s06_c1_p05.png`.
+`prepare_corpus_batches.py` writes `batch_00.zip` … `batch_04.zip`
+(~250 pages, ~65MB each) plus a MANIFEST. Filenames are page ids and
+become the output names.
+
+**Use Drive for the full corpus.** A free session drops after a few
+hours, and re-uploading 65MB every time you reconnect wastes exactly
+the time you are trying to save. Put the zips in a Drive folder once
+and point `OUT_ROOT` there too, so a disconnect costs only the pages
+that were in flight.
+
+`files.upload()` is fine for one batch or a trial.
 """),
     code("""
 import zipfile, pathlib
-from google.colab import files
 
-up = files.upload()                 # choose your .zip
-name = next(iter(up))
+USE_DRIVE = True
+DRIVE_DIR = '/content/drive/MyDrive/answer_scripts'
+BATCH = 'batch_00.zip'      # None extracts every batch at once
 
 IN = pathlib.Path('/content/pages'); IN.mkdir(exist_ok=True)
-with zipfile.ZipFile(name) as z:
-    z.extractall(IN)
+OUT_ROOT = pathlib.Path('/content')
 
-imgs = sorted(p for p in IN.rglob('*') if p.suffix.lower() in {'.png','.jpg','.jpeg'})
-print(f'{len(imgs)} image(s)')
-for p in imgs[:10]: print('  ', p.name)
+if USE_DRIVE:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    src = pathlib.Path(DRIVE_DIR)
+    OUT_ROOT = src                      # results survive the session
+    zips = sorted(src.glob('batch_*.zip'))
+    print(f'{len(zips)} batch(es) in Drive:', [z.name for z in zips])
+    for z in (zips if BATCH is None else [src / BATCH]):
+        with zipfile.ZipFile(z) as archive:
+            archive.extractall(IN)
+        print('extracted', z.name)
+else:
+    from google.colab import files
+    up = files.upload()
+    with zipfile.ZipFile(next(iter(up))) as archive:
+        archive.extractall(IN)
+
+imgs = sorted(p for p in IN.rglob('*')
+              if p.suffix.lower() in {'.png', '.jpg', '.jpeg'})
+print(f'\\n{len(imgs)} image(s) staged')
+
+# Covers should never have left the local machine. Checked again here
+# because the cost of being wrong is student identity data sitting on
+# a hosted GPU, and that is worth two lines of paranoia.
+covers = [p for p in imgs if p.stem.endswith('_p01')]
+if covers:
+    raise SystemExit(f'COVER PAGES PRESENT ({len(covers)}) - remove them '
+                     f'first: {[p.name for p in covers[:5]]}')
+print('no cover pages present')
 """),
 
     md("""
@@ -233,7 +267,7 @@ import time, pathlib, gc, re
 from PIL import Image
 from qwen_vl_utils import process_vision_info
 
-OUT = pathlib.Path('/content') / ENGINE; OUT.mkdir(exist_ok=True)
+OUT = OUT_ROOT / ENGINE; OUT.mkdir(parents=True, exist_ok=True)
 
 BOX = re.compile(r'!\[(diagram|table)\]\(\s*([\d\.]+)\s*,\s*([\d\.]+)\s*,'
                  r'\s*([\d\.]+)\s*,\s*([\d\.]+)\s*\)')
@@ -292,7 +326,18 @@ def read(path, max_patches=MAX_PATCHES):
 t0 = time.time()
 failed = []
 
-for i, p in enumerate(imgs, 1):
+# RESUME. A free Colab session is capped around 12 hours and drops on
+# idle, and a full-corpus pass does not fit in one sitting. Anything
+# already written is skipped, so re-running after a disconnect picks up
+# where it stopped instead of starting again. An empty file counts as
+# NOT done - that is how a failed page is retried rather than kept.
+done = {f.stem for f in OUT.glob('*.md') if f.stat().st_size > 0}
+todo = [p for p in imgs if p.stem not in done]
+
+if done:
+    print(f'resuming: {len(done)} already read, {len(todo)} to go\\n')
+
+for i, p in enumerate(todo, 1):
     started = time.time()
     body, tokens = '', 0
 
@@ -313,7 +358,7 @@ for i, p in enumerate(imgs, 1):
             break
 
     (OUT / (p.stem + '.md')).write_text(body, encoding='utf-8')
-    print(f'[{i}/{len(imgs)}] {p.stem}  {len(body)} chars  '
+    print(f'[{i}/{len(todo)}] {p.stem}  {len(body)} chars  '
           f'{tokens} in-tokens  {time.time()-started:.0f}s', flush=True)
 
     torch.cuda.empty_cache(); gc.collect()
@@ -480,10 +525,39 @@ def main():
         "nbformat_minor": 0,
     }
 
+    # Compile every code cell before writing. Cells are stored as a
+    # LIST OF LINES, so a "\n" that survives into the generator's own
+    # string literal splits one source line into two and breaks the
+    # cell - which happened, and only showed up on Colab. Escaping is
+    # easy to get wrong again; noticing is not.
+    broken = 0
+
+    for index, cell in enumerate(CELLS):
+
+        if cell["cell_type"] != "code":
+            continue
+
+        source = "\n".join(cell["source"])
+
+        if source.lstrip().startswith("!"):
+            continue                      # shell magic, not Python
+
+        try:
+            compile(source, f"<cell {index}>", "exec")
+        except SyntaxError as error:
+            broken += 1
+            print(f"BROKEN cell {index}, line {error.lineno}: {error.msg}")
+            for line in source.split("\n")[max(0, error.lineno - 3):
+                                            error.lineno + 1]:
+                print(f"    {line}")
+
+    if broken:
+        raise SystemExit(f"\n{broken} cell(s) will not compile - not written.")
+
     OUT.write_text(json.dumps(notebook, indent=1), encoding="utf-8")
 
     print(f"wrote {OUT}")
-    print(f"{len(CELLS)} cells")
+    print(f"{len(CELLS)} cells, all code cells compile")
 
     return 0
 

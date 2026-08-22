@@ -89,3 +89,6 @@ modules/*/predictions
 # all derived from real answer scripts. The scripts that build them are
 # tracked; the data and weights are not.
 modules/*/finetune
+# 04_ocr: the upload batches ARE the scanned pages, just zipped for
+# transport to a GPU. They must never enter git.
+modules/*/upload
