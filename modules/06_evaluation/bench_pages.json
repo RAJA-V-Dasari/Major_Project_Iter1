@@ -1,0 +1,122 @@
+[
+ {
+  "bucket": "neat",
+  "student": 29,
+  "cie": 3,
+  "candidates": 6,
+  "page": 8,
+  "path": "student_29/cie_3/page_08.png"
+ },
+ {
+  "bucket": "neat",
+  "student": 6,
+  "cie": 1,
+  "candidates": 5,
+  "page": 5,
+  "path": "student_06/cie_1/page_05.png"
+ },
+ {
+  "bucket": "neat",
+  "student": 1,
+  "cie": 3,
+  "candidates": 6,
+  "page": 10,
+  "path": "student_01/cie_3/page_10.png"
+ },
+ {
+  "bucket": "neat",
+  "student": 51,
+  "cie": 3,
+  "candidates": 4,
+  "page": 4,
+  "path": "student_51/cie_3/page_04.png"
+ },
+ {
+  "bucket": "neat",
+  "student": 30,
+  "cie": 1,
+  "candidates": 5,
+  "page": 2,
+  "path": "student_30/cie_1/page_02.png"
+ },
+ {
+  "bucket": "medium",
+  "student": 45,
+  "cie": 2,
+  "candidates": 12,
+  "page": 3,
+  "path": "student_45/cie_2/page_03.png"
+ },
+ {
+  "bucket": "medium",
+  "student": 12,
+  "cie": 2,
+  "candidates": 12,
+  "page": 6,
+  "path": "student_12/cie_2/page_06.png"
+ },
+ {
+  "bucket": "medium",
+  "student": 15,
+  "cie": 2,
+  "candidates": 8,
+  "page": 9,
+  "path": "student_15/cie_2/page_09.png"
+ },
+ {
+  "bucket": "medium",
+  "student": 27,
+  "cie": 3,
+  "candidates": 7,
+  "page": 2,
+  "path": "student_27/cie_3/page_02.png"
+ },
+ {
+  "bucket": "medium",
+  "student": 1,
+  "cie": 2,
+  "candidates": 7,
+  "page": 3,
+  "path": "student_01/cie_2/page_03.png"
+ },
+ {
+  "bucket": "messy",
+  "student": 10,
+  "cie": 2,
+  "candidates": 19,
+  "page": 10,
+  "path": "student_10/cie_2/page_10.png"
+ },
+ {
+  "bucket": "messy",
+  "student": 55,
+  "cie": 1,
+  "candidates": 13,
+  "page": 8,
+  "path": "student_55/cie_1/page_08.png"
+ },
+ {
+  "bucket": "messy",
+  "student": 25,
+  "cie": 3,
+  "candidates": 19,
+  "page": 7,
+  "path": "student_25/cie_3/page_07.png"
+ },
+ {
+  "bucket": "messy",
+  "student": 23,
+  "cie": 1,
+  "candidates": 21,
+  "page": 2,
+  "path": "student_23/cie_1/page_02.png"
+ },
+ {
+  "bucket": "messy",
+  "student": 3,
+  "cie": 1,
+  "candidates": 29,
+  "page": 3,
+  "path": "student_03/cie_1/page_03.png"
+ }
+]

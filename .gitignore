@@ -79,3 +79,9 @@ annotation/seg_run.log
 # pixels are not. The trained weights stay out too - they are derived
 # from student handwriting and are large.
 modules/*/markers
+
+# 06_evaluation: a transcription IS the student's answer, and predictions
+# are the same text with errors in it. The scoring code and the page
+# selection are safe to track; what is written on the pages is not.
+modules/*/ground_truth
+modules/*/predictions
