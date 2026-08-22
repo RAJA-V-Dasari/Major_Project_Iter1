@@ -85,3 +85,7 @@ modules/*/markers
 # selection are safe to track; what is written on the pages is not.
 modules/*/ground_truth
 modules/*/predictions
+# 04_ocr: line crops, their transcriptions, and any tuned checkpoint are
+# all derived from real answer scripts. The scripts that build them are
+# tracked; the data and weights are not.
+modules/*/finetune
