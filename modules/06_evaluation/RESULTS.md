@@ -1,63 +1,69 @@
 # OCR benchmark results
 
-Scored with `src/ocr_bench.py` over `bench_pages.json`, 4 of 15 pages
-hand-transcribed. Markdown scaffolding is normalised away, diagram
+All 15 pages of `bench_pages.json` hand-transcribed. Scored with
+`src/ocr_bench.py`: Markdown scaffolding normalised away, diagram
 placeholders excluded, and a short table of rendering equivalences
-folded (see `EQUIVALENT`), so this measures reading and not formatting.
+folded (`EQUIVALENT`), so this measures reading and not formatting.
 
-## Headline
+## Headline (15 pages)
 
-| engine | char-weighted CER | neat | messy |
+| engine | char-weighted CER | overall CER | WER |
 |---|---|---|---|
-| `trocr_lines` — 02_segment + TrOCR base, per line | 0.573 | 0.455 | 0.898 |
-| `qwen3b` — Qwen2.5-VL-3B, whole page, zero-shot | 0.141 | 0.080 | 0.318 |
-| `qwen7b` — Qwen2.5-VL-7B 4-bit, revised prompt | **0.101** | 0.093 | 0.124 |
+| `qwen3b` — Qwen2.5-VL-3B zero-shot | 0.229 | 0.250 | 0.447 |
+| `qwen7b` — Qwen2.5-VL-7B 4-bit, revised prompt | **0.099** | **0.122** | **0.281** |
 
-5.7x better than the line pipeline, with no training and no labels.
+(`trocr_lines`, the 02_segment + TrOCR-base pipeline, scored 0.573 on
+the first 4 pages; a 15-page re-run is in progress.)
 
-## Where 7B actually won
+## The 4-page sample was flattering the 3B
 
-| page | content | 3B | 7B |
+Measured on the first 4 pages only, the two models looked close - 0.141
+against 0.101. On all 15 they are not:
+
+| sample | qwen3b | qwen7b | gap |
 |---|---|---|---|
-| s06_c1_p05 | prose | 0.063 | 0.089 |
-| s01_c3_p10 | prose + long division | 0.097 | 0.097 |
-| s03_c1_p03 | sparse prose | 0.109 | 0.062 |
-| s10_c2_p10 | table + 5 diagrams | **0.527** | **0.124** |
+| first 4 pages | 0.141 | 0.101 | 1.4x |
+| all 15 pages | 0.229 | 0.099 | **2.3x** |
 
-Almost the whole gain is the one structured page. On plain prose 3B is
-already at the ceiling and 7B is marginally worse on the best page.
-**If the corpus were pure prose, the 3B would be the right model.** It
-is not: tables and diagrams are common, and that is where the 3B
-collapses.
+The 7B's number barely moved (0.101 -> 0.099) while the 3B's got 60%
+worse. Four pages was too few to rank two models, and would have been
+enough to pick the wrong one on cost grounds.
 
-## The table it used to invent
+## The difficulty buckets are meaningless
 
-Ground truth row 1 is `2,A | 5,A | inf | inf`.
+| bucket | qwen3b | qwen7b |
+|---|---|---|
+| neat | 0.176 | 0.131 |
+| medium | 0.247 | 0.136 |
+| messy | 0.326 | **0.099** |
 
-- 3B: `5 | 6 | 7 | 8` — a Dijkstra-shaped table of invented values
-- 7B: `2 | 5 | ∞ | ∞` — correct numbers, predecessor labels dropped
+For the 7B, "messy" is its BEST bucket. The buckets are keyed to
+spurious-marker count from `07_reconstruct`, which tracks how much junk
+sits in the margin - a property of the handwriting, not of what makes a
+page hard to read. What actually predicts difficulty is dense numeric
+content, and that cuts across all three buckets.
 
-Rows 2-4 are still wrong in 7B (`6 | 8 | 7` where the page says
-`5,A | 6,B | 8,B`). So it is reading rather than confabulating the
-shape, but it is still not reading the cells reliably.
+## Where the 7B still fails
 
-## Two things the revised prompt did NOT fix
+| page | CER | what is on it |
+|---|---|---|
+| s12_c2_p06 | 0.521 | four routing tables, ~56 numeric cells |
+| s51_c3_p04 | 0.260 | two waveform diagrams |
+| s29_c3_p08 | 0.159 | binary checksum working |
 
-**It never declines.** `[?]` appears zero times across all 15 pages in
-both models, including on cells it demonstrably got wrong. Both the
-original and the strengthened anti-fabrication clause failed. A
-confident wrong cell is indistinguishable from a right one in the
-output, which is the failure mode that matters most for grading.
+One page carries the failure. s12_c2_p06 is four 7-row routing tables
+of two-digit numbers and nothing else; at 219 characters of ground
+truth it is also the shortest page in the set, so its errors weigh
+heavily per character. Every one of the 7B's worst pages is dense
+numeric working, and its best are prose.
 
-**Boxes are bands, not boxes.** The 7B did emit
-`![diagram](x1,y1,x2,y2)` and every box is in valid page coordinates —
-but all four are full page width and tile the page vertically
-(0-806, 806-1588, 1588-2151). It is partitioning the page into strips,
-not localising figures. Usable as coarse regions; not tight enough to
-crop a figure without dragging in the text around it.
+## Still unfixed
 
-Asking for grounding inside a transcription prompt appears to be the
-problem — Qwen2.5-VL grounds well when that is the whole request.
-Options, cheapest first: keep the band as a hint and take the tight box
-from `02_segment.find_grids`, which is geometric and already built; or
-make a second grounding-only pass per page that has a figure.
+**Neither model ever declines.** `[?]` appears zero times across all 15
+pages in both, including on cells demonstrably read wrong. Two rounds
+of prompt strengthening changed nothing.
+
+**Boxes are bands.** The 7B emits `![diagram](x1,y1,x2,y2)` in valid
+page coordinates, but they span the full page width and tile it
+vertically rather than enclosing figures. Usable as coarse regions, not
+tight enough to crop from.
