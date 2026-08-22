@@ -73,3 +73,9 @@ annotation/images_cleaned/
 annotation/dataset_clean/
 annotation/segmented/
 annotation/seg_run.log
+
+# 07_reconstruct: marker crops are cut from real answer scripts, and the
+# label sheets render them in bulk. Geometry and labels are safe; the
+# pixels are not. The trained weights stay out too - they are derived
+# from student handwriting and are large.
+modules/*/markers
