@@ -74,6 +74,32 @@ def strip_markdown(text):
     return text
 
 
+# Characters that are the same content written two ways. Folded before
+# scoring, because otherwise an engine is punished for being MORE
+# faithful than the transcription: the page shows an infinity glyph,
+# Qwen wrote "∞" and the hand transcription wrote "inf", and the edit
+# distance counted every one of those as three substitutions.
+#
+# Deliberately short. Each entry is a rendering difference, never a
+# reading difference - nothing here can hide a wrong character.
+EQUIVALENT = {
+    "∞": "inf",     # ∞
+    "—": "-",       # em dash
+    "–": "-",       # en dash
+    "−": "-",       # minus sign
+    "×": "x",       # ×
+    "‘": "'", "’": "'",
+    "“": '"', "”": '"',
+    "…": "...",
+}
+
+
+def fold_equivalents(text):
+    for source, target in EQUIVALENT.items():
+        text = text.replace(source, target)
+    return text
+
+
 def normalise(text, drop_diagrams=True):
     """Comparable form: no markdown, no case, single spaces."""
 
@@ -90,6 +116,7 @@ def normalise(text, drop_diagrams=True):
     # a full-width digit, a non-breaking space - so they do not read as
     # substitutions
     text = unicodedata.normalize("NFKC", text)
+    text = fold_equivalents(text)
 
     text = text.lower()
     text = re.sub(r"\s+", " ", text)

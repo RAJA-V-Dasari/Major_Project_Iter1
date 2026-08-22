@@ -1,61 +1,63 @@
 # OCR benchmark results
 
 Scored with `src/ocr_bench.py` over `bench_pages.json`, 4 of 15 pages
-hand-transcribed so far. Markdown scaffolding is normalised away and
-diagram placeholders excluded, so this measures reading, not formatting.
+hand-transcribed. Markdown scaffolding is normalised away, diagram
+placeholders excluded, and a short table of rendering equivalences
+folded (see `EQUIVALENT`), so this measures reading and not formatting.
 
 ## Headline
 
 | engine | char-weighted CER | neat | messy |
 |---|---|---|---|
-| `trocr_lines` (02_segment + TrOCR base, per line) | 0.573 | 0.455 | 0.898 |
-| `qwen3b` (Qwen2.5-VL-3B, whole page, zero-shot) | **0.141** | 0.080 | 0.318 |
+| `trocr_lines` — 02_segment + TrOCR base, per line | 0.573 | 0.455 | 0.898 |
+| `qwen3b` — Qwen2.5-VL-3B, whole page, zero-shot | 0.141 | 0.080 | 0.318 |
+| `qwen7b` — Qwen2.5-VL-7B 4-bit, revised prompt | **0.101** | 0.093 | 0.124 |
 
-A 4x reduction, with no training and no labels.
+5.7x better than the line pipeline, with no training and no labels.
 
-## The split is prose vs structure, not neat vs messy
+## Where 7B actually won
 
-| page | GT tables | GT diagrams | CER |
+| page | content | 3B | 7B |
 |---|---|---|---|
-| s01_c3_p10 | 0 | 0 | 0.097 |
-| s03_c1_p03 | 0 | 0 | 0.109 |
-| s06_c1_p05 | 0 | 0 | 0.063 |
-| s10_c2_p10 | 7 | 5 | **0.527** |
+| s06_c1_p05 | prose | 0.063 | 0.089 |
+| s01_c3_p10 | prose + long division | 0.097 | 0.097 |
+| s03_c1_p03 | sparse prose | 0.109 | 0.062 |
+| s10_c2_p10 | table + 5 diagrams | **0.527** | **0.124** |
 
-Every prose page lands near 0.1. The single page carrying a table and
-five diagrams is 5x worse than the rest and drags the average up on its
-own. The `neat`/`messy` buckets in `bench_pages.json` are keyed to
-spurious-marker count, which turns out to track handwriting rather than
-difficulty - `s03_c1_p03` is bucketed messy and scores 0.109.
+Almost the whole gain is the one structured page. On plain prose 3B is
+already at the ceiling and 7B is marginally worse on the best page.
+**If the corpus were pure prose, the 3B would be the right model.** It
+is not: tables and diagrams are common, and that is where the 3B
+collapses.
 
-## What the failures actually are
+## The table it used to invent
 
-**The 3B model reads prose honestly.** On `s06_c1_p05` the errors are
-misreadings, not invention: "is the first four" -> "in the first four",
-"88 bits = 11 bytes" -> "1 byte". It correctly dropped both struck-out
-spans without being asked twice.
+Ground truth row 1 is `2,A | 5,A | inf | inf`.
 
-**On the table it fabricated.** Ground truth row 1 is
-`2,A | 5,A | inf | inf`; it emitted `5 | 6 | 7 | 8`. It recognised a
-Dijkstra table and generated a plausibly-shaped one with invented
-values, dropped the graph entirely, and gave 2 iterations where the page
-has 4.
+- 3B: `5 | 6 | 7 | 8` — a Dijkstra-shaped table of invented values
+- 7B: `2 | 5 | ∞ | ∞` — correct numbers, predecessor labels dropped
 
-**It never declined once.** The prompt offers `[?]` for anything
-unreadable and there are zero `[?]` marks across all four pages,
-including the page where it invented a table. So the anti-fabrication
-instruction did not take, and CER alone would not have revealed this -
-0.527 reads as "poor recognition" until you look at the output and see
-it is confident fiction.
+Rows 2-4 are still wrong in 7B (`6 | 8 | 7` where the page says
+`5,A | 6,B | 8,B`). So it is reading rather than confabulating the
+shape, but it is still not reading the cells reliably.
 
-## What this implies
+## Two things the revised prompt did NOT fix
 
-Route tables and diagrams away from the recogniser rather than asking it
-to transcribe them. `02_segment.find_grids` already locates hand-drawn
-structure and was built for exactly this; on this evidence it earns its
-place in an OCR-first pipeline rather than being deleted with the rest
-of the line-cropping stack.
+**It never declines.** `[?]` appears zero times across all 15 pages in
+both models, including on cells it demonstrably got wrong. Both the
+original and the strengthened anti-fabrication clause failed. A
+confident wrong cell is indistinguishable from a right one in the
+output, which is the failure mode that matters most for grading.
 
-Worth testing next, cheaply: whether the 7B model fabricates the same
-table, and whether a prompt that names tables explicitly as a decline
-case ("if you cannot read every cell, emit ![table]") stops it.
+**Boxes are bands, not boxes.** The 7B did emit
+`![diagram](x1,y1,x2,y2)` and every box is in valid page coordinates —
+but all four are full page width and tile the page vertically
+(0-806, 806-1588, 1588-2151). It is partitioning the page into strips,
+not localising figures. Usable as coarse regions; not tight enough to
+crop a figure without dragging in the text around it.
+
+Asking for grounding inside a transcription prompt appears to be the
+problem — Qwen2.5-VL grounds well when that is the whole request.
+Options, cheapest first: keep the band as a hint and take the tight box
+from `02_segment.find_grids`, which is geometric and already built; or
+make a second grounding-only pass per page that has a figure.
