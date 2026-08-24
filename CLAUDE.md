@@ -99,8 +99,12 @@ only mean something on the same pages with the same scorer. Two rules:
 - **A lower CER is not automatically better.** If a model starts
   declining a table it used to invent, CER may barely move while the
   output becomes far more trustworthy. Read the diff, not just the
-  number. The open risk today is that the reader emits zero `[?]` and
-  zero `![table]` across all 15 pages — it never declines.
+  number. Measured over batch00's 250 pages, the reader emitted zero
+  `![table]` and nine real `[?]`, and instead invented: empty-cell loops
+  that ran to the token ceiling, a three-column table that is not on the
+  page, and one `example.com` URL standing in for four legible routing
+  tables. The prompt was rewritten against those findings, so scores
+  taken before that rewrite do not carry over.
 
 Prompt changes invalidate prior scores. The prompt lives once, in
 `make_colab_notebook.py`, and `run_booklet.py` imports it rather than

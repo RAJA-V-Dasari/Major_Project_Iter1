@@ -40,50 +40,85 @@ faithfully is correct output. A right value you supplied is a serious
 error, because the marker cannot tell you invented it.
 
 WHEN YOU CANNOT READ SOMETHING
-Write [?] in place of the word or number. Do this readily - an answer
-peppered with [?] is far more useful than a fluent one that is partly
-invented. Never substitute a plausible word for an illegible one.
+Write [?] in place of the word or number and carry on. Do this readily
+- an answer peppered with [?] is far more useful than a fluent one
+that is partly invented. Never substitute a plausible word for an
+illegible one.
 
-TABLES
-Transcribe tables as Markdown tables. Most are comparisons - two
-columns of words - and you should read them normally.
+Two things are never acceptable, whatever else you do:
 
-The care is needed per CELL, not per table. Any single cell you cannot
-read with certainty becomes [?]. Never infer a cell's value from the
-pattern of the cells around it: a column of numbers that looks like it
-continues a sequence is exactly where a wrong value gets invented.
+  - writing an empty cell, an empty row, or a row of blanks
+  - repeating a line or a row you have already written
 
-Only if MOST of the cells would be [?] - a dense numeric working you
-cannot resolve - skip the table entirely and emit
+If you are about to do either, you have run into something you cannot
+read. Abandon that structure at once and put a marker in place of the
+whole of it. That is the correct output for an unreadable thing, not a
+failure to produce one.
 
-![table](x1,y1,x2,y2)
+MARKERS
+There are exactly two, and they carry no coordinates:
 
-using the box rule below.
+![diagram: short plain description]
+![table: short plain description]
+
+Never write pixel coordinates, never write x1,y1,x2,y2, never write a
+URL or a file name. Where the thing sits on the page is measured
+separately and is not your job.
+
+Put the marker on its own line at the point where the thing appears in
+the answer, between the line above it and the line below it. Its
+position in your output is what locates it, so it must be in the right
+place in the reading order. The description is a few words, enough for
+a human to tell which figure it is:
+
+![diagram: three-way handshake between client and server]
 
 DIAGRAMS
-Diagrams, graphs, figures, flowcharts, timing charts, circuit
-sketches: never describe them in prose and never transcribe the labels
-inside them as text. Emit a placeholder with the box that encloses the
-whole figure, including its labels:
+Any drawing is a marker: figures, graphs, flowcharts, timing charts,
+network sketches, circuits, trees. Never describe a drawing in prose,
+and never transcribe the labels inside it as lines of text.
 
-![diagram](x1,y1,x2,y2)
+If you find yourself writing a run of short disconnected words - "host
+A", "switch", "request", "server 2" - you are transcribing a drawing
+one label at a time. Stop, and emit one marker instead.
 
-Coordinates are pixels in the image as you see it: x1,y1 is the
-top-left corner and x2,y2 the bottom-right. Give one box per distinct
-figure. Make the box tight around the drawing but do not clip any part
-of it, and do not merge two separate figures into one box.
+TABLES
+A table is a grid the student actually ruled on the page. Read it as a
+Markdown table - most are two columns of words and are perfectly
+readable.
+
+Take the care per CELL, not per table. Any single cell you cannot read
+becomes [?]. Never infer a cell from the pattern of the cells around
+it: a column of numbers that looks like it continues a sequence is
+exactly where a wrong value gets invented.
+
+If reading it would mean writing blanks, replace the entire table with
+![table: ...]. One honest marker is worth more than a grid of
+inventions.
+
+Consecutive lines of ordinary writing are NOT a table. Do not put
+plain sentences, or the steps of a worked calculation, inside | |.
+Write them as lines.
 
 STRUCTURE
-- Question numbers appear in the left margin (1, 2a, 2b, 2c, 3a, 3b,
-  4a, 4b). Emit each as: ### 2a)
+- Question numbers appear in the left margin and are one of: 1, 2a,
+  2b, 2c, 3a, 3b, 4a, 4b. Emit each as: ### 2a)
 - Sub-parts (i, ii, iii ... or a, b, c ...) as: #### i)
+- Nothing else is a heading. A numbered point inside an answer is a
+  list item: write "1." or "*", never "### 1". Getting this wrong
+  splits one answer into several.
 - Mathematics: inline LaTeX between $ ... $
 - Struck-out or cancelled text: wrap in ~~ ~~
 - Keep the line breaks as written.
 - Preserve the student's spelling, grammar and arithmetic exactly,
   errors included.
 
-Output only the Markdown. No commentary, no preamble."""
+OUTPUT
+Markdown only, beginning with the first thing on the page. No
+commentary, no preamble, and no sentence taken from these
+instructions. Do not wrap your output in ``` fences; use ``` only
+around a block the student themselves laid out as one, such as a
+column of working."""
 
 
 def code(source):
@@ -257,12 +292,14 @@ processor's pixel budget. Passing a raw PIL image to
 `processor(images=...)` skips that step, which is how a page becomes
 ~4,400 visual tokens and asks for 18.85 GiB.
 
-**Boxes come back in the RESIZED image's coordinates, not the page's.**
-At 1024 patches a 1598x2177 page is seen at roughly 768x1046, so a box
-the model gives as `(120,340,980,760)` means nothing against the
-original file until it is scaled by the ratio between the two. That
-rescale happens here, and the boxes written to the Markdown are in
-ORIGINAL page pixels - directly usable for cropping the figure out.
+**Markers carry no coordinates, deliberately.** Asking for pixels
+produced round numbers in the model's own resized space - `105, 210,
+630, 840` is `50, 100, 300, 400` at 768x1046 - and of six boxes drawn
+back onto their pages only one enclosed its figure; one boxed prose and
+missed the diagram entirely. What the reader does get right is the
+reading ORDER: the marker lands where the figure belongs in the answer.
+So position in the output locates the figure, and
+`modules/03_assemble/src/segment.py` supplies the pixels.
 
 A page that still OOMs is retried once at half the patch budget rather
 than being lost, and the message says so - a page silently written as
@@ -276,29 +313,14 @@ from qwen_vl_utils import process_vision_info
 
 OUT = OUT_ROOT / ENGINE; OUT.mkdir(parents=True, exist_ok=True)
 
-BOX = re.compile(r'!\[(diagram|table)\]\(\s*([\d\.]+)\s*,\s*([\d\.]+)\s*,'
-                 r'\s*([\d\.]+)\s*,\s*([\d\.]+)\s*\)')
-
-def rescale_boxes(body, seen_size, true_size):
-    \"\"\"Model boxes are in the resized image; put them back on the page.\"\"\"
-    (sw, sh), (tw, th) = seen_size, true_size
-    if not sw or not sh:
-        return body
-    fx, fy = tw / sw, th / sh
-
-    def fix(m):
-        kind = m.group(1)
-        x1, y1, x2, y2 = (float(m.group(i)) for i in range(2, 6))
-        # clamp, because a box that runs off the edge crops to nothing
-        x1, x2 = sorted((max(0, x1 * fx), min(tw, x2 * fx)))
-        y1, y2 = sorted((max(0, y1 * fy), min(th, y2 * fy)))
-        return f'![{kind}]({int(x1)},{int(y1)},{int(x2)},{int(y2)})'
-
-    return BOX.sub(fix, body)
+# A marker carries a description, never coordinates. Where a figure
+# sits on the page is measured by modules/03_assemble/src/segment.py,
+# which is precise about geometry; asking the model for pixels produced
+# round numbers in its own resized space that mostly missed the figure.
+MARK = re.compile(r'!\[(diagram|table):\s*([^\]]*)\]')
 
 def read(path, max_patches=MAX_PATCHES, penalty=1.0):
     image = Image.open(path).convert('RGB')
-    true_size = image.size
 
     messages = [{"role": "user", "content": [
         {"type": "image", "image": image,
@@ -311,9 +333,6 @@ def read(path, max_patches=MAX_PATCHES, penalty=1.0):
 
     # THIS is the resize step. Without it the pixel budget is ignored.
     image_inputs, _ = process_vision_info(messages)
-
-    # what the model actually saw - the basis for every box it returns
-    seen_size = image_inputs[0].size
 
     inputs = processor(text=[text], images=image_inputs,
                        padding=True, return_tensors="pt").to(model.device)
@@ -333,7 +352,6 @@ def read(path, max_patches=MAX_PATCHES, penalty=1.0):
     truncated = int(trimmed.shape[0]) >= MAX_NEW
 
     body = processor.decode(trimmed, skip_special_tokens=True).strip()
-    body = rescale_boxes(body, seen_size, true_size)
 
     del inputs, out
     return body, tokens, truncated
@@ -475,21 +493,24 @@ unboxed = 0
 for f in sorted(OUT.glob('*.md')):
     body = f.read_text(encoding='utf-8')
     marks['[?]'] += len(re.findall(r'\\[\\?\\]', body))
-    marks['![diagram] boxed'] += len([b for b in BOX.findall(body)
-                                      if b[0] == 'diagram'])
-    marks['![table] boxed'] += len([b for b in BOX.findall(body)
-                                    if b[0] == 'table'])
+    marks['![diagram:] markers'] += len([m for m in MARK.findall(body)
+                                         if m[0] == 'diagram'])
+    marks['![table:] markers'] += len([m for m in MARK.findall(body)
+                                       if m[0] == 'table'])
     marks['md table rows'] += len([l for l in body.splitlines()
                                    if l.strip().startswith('|')])
-    # a placeholder with no coordinates is still useful text but is no
-    # use for cropping, so it is counted separately rather than hidden
-    unboxed += len(re.findall(r'!\\[(?:diagram|table)\\](?!\\s*\\()', body))
+    # Anything image-shaped that is not one of the two markers: a
+    # bare ![diagram], a coordinate tuple, an invented URL. All
+    # three appeared in the previous run, and each one is a figure
+    # the pipeline cannot place.
+    unboxed += len(re.findall(r'!\[[^\]]*\]\(', body))
+    unboxed += len(re.findall(r'!\[(?:diagram|table)\](?!:)', body))
 
-marks['placeholders WITHOUT a box'] = unboxed
+marks['MALFORMED markers'] = unboxed
 
 print(f'{"signal":<28}{"count":>7}')
-for k in ['[?]', '![diagram] boxed', '![table] boxed',
-          'placeholders WITHOUT a box', 'md table rows']:
+for k in ['[?]', '![diagram:] markers', '![table:] markers',
+          'MALFORMED markers', 'md table rows']:
     print(f'{k:<28}{marks[k]:>7}')
 
 print()
@@ -500,8 +521,9 @@ else:
     print('Good: it is declining where it cannot read.')
 
 if unboxed:
-    print(f'WARNING: {unboxed} placeholder(s) came back with no '
-          f'coordinates, so nothing can be cropped for them.')
+    print(f'WARNING: {unboxed} malformed marker(s). The only two valid '
+          f'forms are ![diagram: ...] and ![table: ...] - anything with '
+          f'parentheses is a coordinate tuple or a URL the model made up.')
 
 if marks['md table rows'] and not marks['[?]']:
     print('NOTE: tables were transcribed with no [?] anywhere. Check '
@@ -510,36 +532,44 @@ if marks['md table rows'] and not marks['[?]']:
 """),
 
     md("""
-## 8. Draw the boxes back onto the pages
+## 8. Are the markers in the right place?
 
-A wrong box is invisible in the Markdown and obvious in a picture. If
-these do not sit tightly around the figures, the coordinates are not
-usable for cropping and nothing downstream will work.
+There are no coordinates to check any more. What has to be right is the
+marker's POSITION IN THE READING ORDER - the line above it and the line
+below it should be the writing that sits either side of the figure on
+the page. That is what lets the geometry stage match a marker to a
+region.
+
+This prints each marker with its neighbours, next to the page itself.
+Read the two together: if the marker claims to follow "* Eg:" then
+"* Eg:" should be the last thing above the drawing on the scan.
 """),
     code("""
-from PIL import ImageDraw
-
 shown = 0
 for f in sorted(OUT.glob('*.md')):
     body = f.read_text(encoding='utf-8')
-    boxes = BOX.findall(body)
-    if not boxes:
+    lines = body.splitlines()
+    hits = [i for i, l in enumerate(lines) if MARK.search(l)]
+    if not hits:
         continue
 
-    src = [p for p in imgs if p.stem == f.stem]
+    src = [q for q in imgs if q.stem == f.stem]
     if not src:
         continue
 
-    im = Image.open(src[0]).convert('RGB')
-    draw = ImageDraw.Draw(im)
-    for kind, x1, y1, x2, y2 in boxes:
-        colour = (200, 30, 30) if kind == 'diagram' else (30, 90, 200)
-        draw.rectangle([float(x1), float(y1), float(x2), float(y2)],
-                       outline=colour, width=6)
-        draw.text((float(x1) + 8, float(y1) + 8), kind, fill=colour)
+    print(f'=== {f.stem} : {len(hits)} marker(s) ===')
+    for i in hits:
+        above = next((lines[j] for j in range(i - 1, -1, -1)
+                      if lines[j].strip()), '(top of page)')
+        below = next((lines[j] for j in range(i + 1, len(lines))
+                      if lines[j].strip()), '(bottom of page)')
+        print(f'   above: {above[:64]}')
+        print(f'   MARK : {lines[i].strip()[:64]}')
+        print(f'   below: {below[:64]}')
+        print()
 
+    im = Image.open(src[0]).convert('RGB')
     im.thumbnail((700, 700))
-    print(f'{f.stem}: {len(boxes)} box(es)')
     display(im)
 
     shown += 1
@@ -547,15 +577,9 @@ for f in sorted(OUT.glob('*.md')):
         break
 
 if not shown:
-    print('No boxed placeholders were produced at all - either these '
-          'pages have no figures, or the box instruction did not take.')
-"""),
-
-    md("## 9. Spot-check the page that failed last time"),
-    code("""
-target = 's10_c2_p10'
-hit = [f for f in OUT.glob('*.md') if f.stem == target]
-print((hit[0] if hit else sorted(OUT.glob('*.md'))[0]).read_text(encoding='utf-8')[:2000])
+    print('No markers at all. Either these pages carry no figures, or '
+          'the marker instruction did not take - check a page with a '
+          'diagram on it before running the rest of the corpus.')
 """),
 
     md("""

@@ -23,13 +23,13 @@ import argparse, collections, io, pathlib, re, sys
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
                               errors="replace")
 
-PAGE_W, PAGE_H = 1598, 2177     # prepared page size; boxes are in these
-
-# The only figure form that can be cropped. Anything else shaped like an
-# image is a failure to emit coordinates, not a figure.
-BOX_OK = re.compile(
-    r"!\[(diagram|table)\]\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$")
-BOX_ANY = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# The only two marker forms. Coordinates were dropped after they turned
+# out to be round numbers in the model's own resized space that mostly
+# missed the figure; position in the reading order locates it now, and
+# segment.py supplies the pixels. A tuple or a URL is therefore no
+# longer a badly-aimed box, it is a marker the pipeline cannot place.
+BOX_OK = re.compile(r"!\[(diagram|table):\s*([^\]]*)\]$")
+BOX_ANY = re.compile(r"!\[[^\]]*\](?:\([^)]*\))?")
 
 HEADING = re.compile(r"^(#{1,6})\s*(.+?)\s*$", re.M)
 NUMBER_ONLY = re.compile(r"^([0-9]{1,2})\)?$")
@@ -159,13 +159,10 @@ def main():
         bad = []
         for hit in BOX_ANY.findall(body):
             m = BOX_OK.match(hit)
-            if not m:
+            if m:
+                marks[f"![{m.group(1)}] usable"] += 1
+            else:
                 bad.append(hit)
-                continue
-            marks[f"![{m.group(1)}] usable"] += 1
-            x1, y1, x2, y2 = map(int, re.findall(r"\d+", hit))
-            if x2 > PAGE_W or y2 > PAGE_H or x2 <= x1 or y2 <= y1:
-                bad.append(hit + "  <- off-page")
         if bad:
             malformed[stem] = bad
 
