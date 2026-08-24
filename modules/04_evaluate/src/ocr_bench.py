@@ -56,7 +56,10 @@ PRED_DIR = STAGE_DIR / "predictions"
 # A ground-truth line that stands in for a drawing rather than text.
 DIAGRAM_LINE = re.compile(r"^\s*!\[.*?\]|^\s*<!--\s*(diagram|edges)", re.I)
 
-BUCKETS = ["neat", "medium", "messy"]
+# "added" holds pages transcribed after the stratified sample was drawn.
+# They are not a difficulty bucket and are not balanced, so they are
+# reported separately rather than folded into the three.
+BUCKETS = ["neat", "medium", "messy", "added"]
 
 
 def strip_markdown(text):
@@ -91,6 +94,12 @@ EQUIVALENT = {
     "‘": "'", "’": "'",
     "“": '"', "”": '"',
     "…": "...",
+    # A handwritten arrow is one mark, and "->" or the glyph are both
+    # honest readings of it. Without this a transcriber writing one and
+    # an engine writing the other is charged two substitutions for
+    # agreeing.
+    "→": "->", "⟶": "->", "⇒": "=>",
+    "←": "<-", "↔": "<->",
 }
 
 
@@ -168,13 +177,40 @@ def page_key(entry):
             f"_p{entry['page']:02d}")
 
 
-def load_pages():
+STEM = re.compile(r"^s(\d+)_c(\d+)_p(\d+)$")
 
+
+def load_pages():
+    """The curated sample, plus any page that has been transcribed since.
+
+    `bench_pages.json` is a stratified sample chosen when the benchmark
+    was built. Transcribing is slow, so more ground truth arrives a page
+    at a time and rarely lands inside that sample - and a transcription
+    nobody scores is wasted work. Any `.md` in the truth directory is
+    therefore a benchmark page too, bucketed as "added".
+    """
     if not PAGES.exists():
         raise SystemExit(f"{PAGES} not found")
 
     with open(PAGES, encoding="utf-8") as handle:
-        return json.load(handle)
+        entries = json.load(handle)
+
+    known = {page_key(e) for e in entries}
+
+    for path in sorted(TRUTH_DIR.glob("*.md")):
+        m = STEM.match(path.stem)
+        if not m or path.stem in known:
+            continue
+        student, cie, page = (int(g) for g in m.groups())
+        entries.append({
+            "bucket": "added",
+            "student": student,
+            "cie": cie,
+            "page": page,
+            "path": f"student_{student:02d}/cie_{cie}/page_{page:02d}.png",
+        })
+
+    return entries
 
 
 def main():
@@ -183,7 +219,18 @@ def main():
     parser.add_argument("--engine")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--truth", type=Path,
+                        help="directory of hand transcriptions "
+                             "(default: 04_evaluate/ground_truth)")
     args = parser.parse_args()
+
+    # Transcribing is slow handwork, so where the files live is the
+    # transcriber's choice rather than this script's.
+    global TRUTH_DIR
+    if args.truth:
+        TRUTH_DIR = args.truth
+        if not TRUTH_DIR.is_dir():
+            raise SystemExit(f"no such directory: {TRUTH_DIR}")
 
     entries = load_pages()
 
