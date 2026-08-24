@@ -168,6 +168,14 @@ and point `OUT_ROOT` there too, so a disconnect costs only the pages
 that were in flight.
 
 `files.upload()` is fine for one batch or a trial.
+
+**Start with the test batch.** `prepare_test_batch.py` writes
+`batch_test.zip` - 30 pages, 7.3MB, ~25 minutes on a T4. Every page in
+it has known recorded behaviour: 21 that broke on the last run and 9
+controls that came back correct and must still come back correct. Set
+`USE_DRIVE = False` and upload it, or drop it in Drive and set
+`BATCH = 'batch_test.zip'`. Check sections 6b, 7 and 8 against
+`upload/TEST_BATCH.csv` before spending hours on the full corpus.
 """),
     code("""
 import zipfile, pathlib
