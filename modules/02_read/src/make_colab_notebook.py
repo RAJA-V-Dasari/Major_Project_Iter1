@@ -99,6 +99,73 @@ the page inside a code fence. Use a fence only where the student
 themselves laid writing out as a block."""
 
 
+# The prompt batch00 was read with. It is kept verbatim, and
+# selectable in the notebook, because it is the only prompt whose
+# behaviour over 250 pages is actually known: 219 of 250 pages
+# structurally clean, 0.099 CER on the 15 benchmark pages. Its
+# faults are known too - it never declines and its box coordinates
+# are guesses - but they are measured and detectable, which an
+# untested rewrite's faults are not. If a run goes wrong mid
+# session, switching back is one line rather than a git revert.
+PROMPT_BATCH00 = """You are transcribing a handwritten exam answer that a
+human will mark. Your only job is to report what is on the paper.
+
+THE ONE RULE THAT MATTERS
+You are not answering this exam and you are not helping the student.
+Do not use what you know about the subject to fill in, complete or
+correct anything. If the page shows a worked example you recognise,
+that recognition is a trap: transcribe the marks that are there, even
+where they contradict what the answer should be. A wrong value copied
+faithfully is correct output. A right value you supplied is a serious
+error, because the marker cannot tell you invented it.
+
+WHEN YOU CANNOT READ SOMETHING
+Write [?] in place of the word or number. Do this readily - an answer
+peppered with [?] is far more useful than a fluent one that is partly
+invented. Never substitute a plausible word for an illegible one.
+
+TABLES
+Transcribe tables as Markdown tables. Most are comparisons - two
+columns of words - and you should read them normally.
+
+The care is needed per CELL, not per table. Any single cell you cannot
+read with certainty becomes [?]. Never infer a cell's value from the
+pattern of the cells around it: a column of numbers that looks like it
+continues a sequence is exactly where a wrong value gets invented.
+
+Only if MOST of the cells would be [?] - a dense numeric working you
+cannot resolve - skip the table entirely and emit
+
+![table](x1,y1,x2,y2)
+
+using the box rule below.
+
+DIAGRAMS
+Diagrams, graphs, figures, flowcharts, timing charts, circuit
+sketches: never describe them in prose and never transcribe the labels
+inside them as text. Emit a placeholder with the box that encloses the
+whole figure, including its labels:
+
+![diagram](x1,y1,x2,y2)
+
+Coordinates are pixels in the image as you see it: x1,y1 is the
+top-left corner and x2,y2 the bottom-right. Give one box per distinct
+figure. Make the box tight around the drawing but do not clip any part
+of it, and do not merge two separate figures into one box.
+
+STRUCTURE
+- Question numbers appear in the left margin (1, 2a, 2b, 2c, 3a, 3b,
+  4a, 4b). Emit each as: ### 2a)
+- Sub-parts (i, ii, iii ... or a, b, c ...) as: #### i)
+- Mathematics: inline LaTeX between $ ... $
+- Struck-out or cancelled text: wrap in ~~ ~~
+- Keep the line breaks as written.
+- Preserve the student's spelling, grammar and arithmetic exactly,
+  errors included.
+
+Output only the Markdown. No commentary, no preamble."""
+
+
 def lines_of(source):
     """Split into nbformat's `source` list.
 
@@ -290,8 +357,27 @@ print('model  :', MODEL, '(4-bit)' if FOUR_BIT else '(bf16)')
 print('max visual tokens per image:', MAX_PATCHES)
 """),
 
-    md("## 5. The prompt"),
-    code('PROMPT = """' + PROMPT + '"""\n\nprint(PROMPT)'),
+    md("""
+## 5. The prompt
+
+`USE` picks between two, and the choice is a real one.
+
+`batch00` is the prompt whose behaviour over 250 pages is actually
+known: 219 of them structurally clean, 0.099 CER on the benchmark
+pages. Its faults are known too - it never declines, and its figure
+coordinates are guesses - but they are measured, and `check_batch.py`
+finds them.
+
+`v2` targets those faults. It has not been run over a corpus.
+
+If a run starts producing something obviously wrong, change this one
+line rather than stopping to work out what happened.
+"""),
+    code('USE = "v2"        # "v2" or "batch00" - see the markdown above\n\n'
+         'PROMPT_V2 = """' + PROMPT + '"""\n\n'
+         'PROMPT_BATCH00 = """' + PROMPT_BATCH00 + '"""\n\n'
+         'PROMPT = PROMPT_V2 if USE == "v2" else PROMPT_BATCH00\n'
+         'print(f"using {USE}, {len(PROMPT)} chars")'),
 
     md("""
 ## 6. Read every page
