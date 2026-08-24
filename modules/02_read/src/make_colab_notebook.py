@@ -27,98 +27,76 @@ OUT = Path(__file__).resolve().parent.parent / "read_pages_colab.ipynb"
 #   been". Fluent invention is the one failure a marker cannot catch,
 #   so the model is given an explicit way to say it cannot read
 #   something, and [?] is greppable afterwards.
-PROMPT = """You are transcribing a handwritten exam answer that a
-human will mark. Your only job is to report what is on the paper.
+PROMPT = """You are transcribing one page of a handwritten exam answer
+so that a human can mark it. Report what is on the paper, and nothing
+else.
 
-THE ONE RULE THAT MATTERS
-You are not answering this exam and you are not helping the student.
-Do not use what you know about the subject to fill in, complete or
-correct anything. If the page shows a worked example you recognise,
-that recognition is a trap: transcribe the marks that are there, even
-where they contradict what the answer should be. A wrong value copied
-faithfully is correct output. A right value you supplied is a serious
-error, because the marker cannot tell you invented it.
+Do not answer the exam. Do not use what you know about the subject to
+fill in, complete or correct anything. If you recognise the worked
+example, that recognition is a trap: copy the marks that are there,
+even where they contradict what the answer should be. A wrong value
+copied faithfully is correct output. A right value you supplied is a
+serious error, because the marker cannot tell that you invented it.
 
-WHEN YOU CANNOT READ SOMETHING
-Write [?] in place of the word or number and carry on. Do this readily
-- an answer peppered with [?] is far more useful than a fluent one
-that is partly invented. Never substitute a plausible word for an
-illegible one.
+Most pages are ordinary handwriting. Transcribe them as plain lines,
+keeping the line breaks, spelling, grammar and arithmetic exactly as
+written, mistakes included.
 
-Two things are never acceptable, whatever else you do:
+Where you cannot read a word or a number, write [?] and carry on. Use
+it freely. A page with [?] in it is useful, because the marker knows
+which parts to check. A fluent page that is partly invented is not,
+because nothing in it says which parts to distrust.
 
-  - writing an empty cell, an empty row, or a row of blanks
-  - repeating a line or a row you have already written
+Drawings
+A drawing is anything the student drew rather than wrote: a figure, a
+graph of nodes and edges, a flowchart, a timing chart, a network or
+circuit sketch, a tree. Do not describe it. Do not transcribe the
+labels inside it. Do not lay it out as rows and columns. Replace the
+whole drawing with a single line:
 
-If you are about to do either, you have run into something you cannot
-read. Abandon that structure at once and put a marker in place of the
-whole of it. That is the correct output for an unreadable thing, not a
-failure to produce one.
+![diagram: a few words saying which drawing this is]
 
-MARKERS
-There are exactly two, and they carry no coordinates:
+Put that line where the drawing sits in the answer, with the writing
+that comes before it above and the writing that follows it below.
+Judge by what the marks are, not by what they contain: a graph whose
+nodes hold numbers is still a drawing.
 
-![diagram: short plain description]
-![table: short plain description]
+Tables
+A table is a grid the student ruled on the page, with writing sitting
+inside its cells. Read it as a Markdown table, one row per ruled row.
 
-Never write pixel coordinates, never write x1,y1,x2,y2, never write a
-URL or a file name. Where the thing sits on the page is measured
-separately and is not your job.
+Read each cell on its own, and put [?] in any cell you cannot make
+out. Never work a cell out from its neighbours: a column that looks
+like it continues a sequence is exactly where a wrong value gets
+invented.
 
-Put the marker on its own line at the point where the thing appears in
-the answer, between the line above it and the line below it. Its
-position in your output is what locates it, so it must be in the right
-place in the reading order. The description is a few words, enough for
-a human to tell which figure it is:
+Every cell you write must hold something you actually read on the
+page. If that leaves you with a table you cannot fill, write this
+instead and move on:
 
-![diagram: three-way handshake between client and server]
+![table: a few words saying which table this is]
 
-DIAGRAMS
-Any drawing is a marker: figures, graphs, flowcharts, timing charts,
-network sketches, circuits, trees. Never describe a drawing in prose,
-and never transcribe the labels inside it as lines of text.
+If the student ruled no grid, there is no table. Ordinary lines, the
+steps of a calculation, a list of addresses: those are lines, and they
+stay lines.
 
-If you find yourself writing a run of short disconnected words - "host
-A", "switch", "request", "server 2" - you are transcribing a drawing
-one label at a time. Stop, and emit one marker instead.
+Question numbers
+The number in the left margin is one of 1, 2a, 2b, 2c, 3a, 3b, 4a, 4b.
+Write it as a heading, like: ### 2a)
+A part within it (i, ii, iii, or a, b, c) becomes: #### i)
 
-TABLES
-A table is a grid the student actually ruled on the page. Read it as a
-Markdown table - most are two columns of words and are perfectly
-readable.
+Nothing else is ever a heading. A numbered point inside an answer is a
+list item, written 1. or *, because a heading there would split one
+answer into several.
 
-Take the care per CELL, not per table. Any single cell you cannot read
-becomes [?]. Never infer a cell from the pattern of the cells around
-it: a column of numbers that looks like it continues a sequence is
-exactly where a wrong value gets invented.
+Also
+Mathematics goes inline, between $ and $.
+Struck-out writing is wrapped in ~~ ~~.
 
-If reading it would mean writing blanks, replace the entire table with
-![table: ...]. One honest marker is worth more than a grid of
-inventions.
-
-Consecutive lines of ordinary writing are NOT a table. Do not put
-plain sentences, or the steps of a worked calculation, inside | |.
-Write them as lines.
-
-STRUCTURE
-- Question numbers appear in the left margin and are one of: 1, 2a,
-  2b, 2c, 3a, 3b, 4a, 4b. Emit each as: ### 2a)
-- Sub-parts (i, ii, iii ... or a, b, c ...) as: #### i)
-- Nothing else is a heading. A numbered point inside an answer is a
-  list item: write "1." or "*", never "### 1". Getting this wrong
-  splits one answer into several.
-- Mathematics: inline LaTeX between $ ... $
-- Struck-out or cancelled text: wrap in ~~ ~~
-- Keep the line breaks as written.
-- Preserve the student's spelling, grammar and arithmetic exactly,
-  errors included.
-
-OUTPUT
-Markdown only, beginning with the first thing on the page. No
-commentary, no preamble, and no sentence taken from these
-instructions. Do not wrap your output in ``` fences; use ``` only
-around a block the student themselves laid out as one, such as a
-column of working."""
+Give the Markdown for the page and nothing else: no preamble, no
+commentary, and no sentence taken from these instructions. Do not put
+the page inside a code fence. Use a fence only where the student
+themselves laid writing out as a block."""
 
 
 def lines_of(source):
@@ -268,11 +246,19 @@ else:
 MIN_PATCHES, MAX_PATCHES = 256, 1024
 
 # Greedy decoding sometimes falls into a repetition loop and then runs
-# to this ceiling. A normal page is ~250 tokens, so 1536 is generous;
-# raising it would only make a loop cost more. The penalty is applied
-# ONLY on the retry - a table with legitimately repeated cell values
-# must not be penalised on the first, clean pass.
-MAX_NEW, REP_PENALTY = 1536, 1.15
+# to this ceiling, so the ceiling sets what a loop costs: at ~7.5 tok/s
+# a page that loops burns MAX_NEW/7.5 seconds and is then retried, and
+# on the test batch two pages cost 440s each that way.
+#
+# The largest page here that was read correctly is ~1400 characters,
+# roughly 400 tokens, so 1024 leaves about 2.5x headroom over anything
+# genuine while cutting a loop from 203s to ~135s. A page that truly
+# needs more than this does not exist in the corpus; a page that asks
+# for it is looping.
+#
+# The penalty applies ONLY on the retry - a table with legitimately
+# repeated cell values must not be penalised on the first, clean pass.
+MAX_NEW, REP_PENALTY = 1024, 1.15
 
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
