@@ -121,14 +121,29 @@ around a block the student themselves laid out as one, such as a
 column of working."""
 
 
+def lines_of(source):
+    """Split into nbformat's `source` list.
+
+    Every element except the last MUST keep its trailing newline. A
+    notebook reader concatenates the list with "".join, so a list of
+    bare lines is reassembled into one enormous line and every cell
+    opens as a single unreadable row. Most local tooling is forgiving
+    about this; Colab is not.
+
+    splitlines(keepends=True) is exactly the rule: it keeps the newline
+    on every line that had one and leaves the last line bare.
+    """
+    return source.strip().splitlines(keepends=True)
+
+
 def code(source):
     return {"cell_type": "code", "execution_count": None, "metadata": {},
-            "outputs": [], "source": source.strip().split("\n")}
+            "outputs": [], "source": lines_of(source)}
 
 
 def md(source):
     return {"cell_type": "markdown", "metadata": {},
-            "source": source.strip().split("\n")}
+            "source": lines_of(source)}
 
 
 CELLS = [
@@ -654,7 +669,7 @@ def main():
         if cell["cell_type"] != "code":
             continue
 
-        source = "\n".join(cell["source"])
+        source = "".join(cell["source"])
 
         if source.lstrip().startswith("!"):
             continue                      # shell magic, not Python
@@ -667,6 +682,16 @@ def main():
             for line in source.split("\n")[max(0, error.lineno - 3):
                                             error.lineno + 1]:
                 print(f"    {line}")
+
+    # Structural guard, separate from the compile check above. A cell
+    # whose lines have lost their newlines still compiles once joined,
+    # so only this catches the file collapsing to one line per cell.
+    for index, cell in enumerate(CELLS):
+        for line in cell["source"][:-1]:
+            if not line.endswith("\n"):
+                raise SystemExit(
+                    f"cell {index} line {line[:40]!r} has no newline - "
+                    f"the notebook would open as one line per cell")
 
     if broken:
         raise SystemExit(f"\n{broken} cell(s) will not compile - not written.")
