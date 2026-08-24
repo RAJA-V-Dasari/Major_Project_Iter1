@@ -221,48 +221,133 @@ marks. They are excluded by prepare_corpus_batches.py, and checked again below.
 (~250 pages, ~65MB each) plus a MANIFEST. Filenames are page ids and
 become the output names.
 
-**Use Drive for the full corpus.** A free session drops after a few
-hours, and re-uploading 65MB every time you reconnect wastes exactly
-the time you are trying to save. Put the zips in a Drive folder once
-and point `OUT_ROOT` there too, so a disconnect costs only the pages
-that were in flight.
+### Somebody else's GPU, the owner's Drive
 
-`files.upload()` is fine for one batch or a trial.
+Colab GPU quota is per account, so the reading can be done from another
+account while the corpus stays in the owner's Drive.
+
+**Owner, once.** Right-click the folder holding the batch zips →
+*Share* → *General access* → **Anyone with the link** → *Viewer*. Copy
+the link into `LINK` below. Nothing else to set up, and nothing to
+install on the runner's side. When the reading is finished, set it back
+to *Restricted* — the link is what grants access, so revoking it is the
+whole of the cleanup.
+
+**Runner.** Paste the link, pick a `BATCH`, run. Pages are fetched with
+`gdown`; no Drive account or permission of your own is needed for them.
+
+**Results go to the runner's own Drive**, not to the runtime. A free
+session drops after a few hours and the corpus takes 8-15, so results
+that live only on the runtime are lost with it. In a mounted Drive
+folder they survive, and re-running simply resumes where it stopped.
+Zip that folder and send it back when the corpus is done, or use
+section 9.
+
+`SOURCE = 'upload'` is fine for one batch or a trial.
 
 **Start with the test batch.** `prepare_test_batch.py` writes
 `batch_test.zip` - 30 pages, 7.3MB, ~25 minutes on a T4. Every page in
 it has known recorded behaviour: 21 that broke on the last run and 9
 controls that came back correct and must still come back correct. Set
-`USE_DRIVE = False` and upload it, or drop it in Drive and set
+`SOURCE = 'upload'`, or put it in the Drive folder and set
 `BATCH = 'batch_test.zip'`. Check sections 6b, 7 and 8 against
 `upload/TEST_BATCH.csv` before spending hours on the full corpus.
 """),
     code("""
-import zipfile, pathlib
+import zipfile, pathlib, subprocess, sys
 
-USE_DRIVE = True
+# Where the pages come from. The corpus can stay in its owner's Drive
+# while somebody else's GPU quota does the reading.
+#
+#   'link'    a Drive link set to "anyone with the link", fetched with
+#             gdown. The runner needs no account and no permissions.
+#   'drive'   a folder already mounted in the runner's own Drive.
+#   'upload'  files.upload(), fine for the 7MB test batch.
+SOURCE = 'link'
+
+LINK = ''                   # the owner's Drive folder or file link
 DRIVE_DIR = '/content/drive/MyDrive/answer_scripts'
-BATCH = 'batch_00.zip'      # None extracts every batch at once
+BATCH = 'batch_00.zip'      # None extracts every batch present
+
+# Results go to the RUNNER's own Drive. A free session drops after a
+# few hours and the corpus takes 8-15, so anything written only to the
+# runtime is lost with it; in Drive the run resumes instead of starting
+# again. Set False only for a short test.
+SAVE_TO_DRIVE = True
+RESULTS_DIR = '/content/drive/MyDrive/answer_scripts_out'
 
 IN = pathlib.Path('/content/pages'); IN.mkdir(exist_ok=True)
 OUT_ROOT = pathlib.Path('/content')
 
-if USE_DRIVE:
-    from google.colab import drive
-    drive.mount('/content/drive')
-    src = pathlib.Path(DRIVE_DIR)
-    OUT_ROOT = src                      # results survive the session
-    zips = sorted(src.glob('batch_*.zip'))
-    print(f'{len(zips)} batch(es) in Drive:', [z.name for z in zips])
-    for z in (zips if BATCH is None else [src / BATCH]):
+
+# Extract the wanted batch, or the only one there is. A comment and not
+# a docstring: cell source is held in a triple-quoted string here, so a
+# docstring inside a cell closes the cell early.
+def stage(zips):
+    if not zips:
+        raise SystemExit('no batch zip found - check the path or link')
+
+    if BATCH is None or len(zips) == 1:
+        picked = zips
+    else:
+        picked = [z for z in zips if z.name == BATCH]
+        if not picked:
+            raise SystemExit(f'{BATCH} not among {[z.name for z in zips]}')
+
+    for z in picked:
         with zipfile.ZipFile(z) as archive:
             archive.extractall(IN)
         print('extracted', z.name)
+
+
+if SAVE_TO_DRIVE:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    OUT_ROOT = pathlib.Path(RESULTS_DIR)
+    OUT_ROOT.mkdir(parents=True, exist_ok=True)
+    print(f'results -> {OUT_ROOT} (survives a dropped session)')
+else:
+    print('results -> this runtime only; they are lost if it drops')
+
+if SOURCE == 'link':
+    if not LINK:
+        raise SystemExit('set LINK to the shared Drive link')
+
+    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'gdown'],
+                   check=True)
+    import gdown
+
+    got = pathlib.Path('/content/zips'); got.mkdir(exist_ok=True)
+    if '/folders/' in LINK:
+        gdown.download_folder(LINK, output=str(got), quiet=True,
+                              use_cookies=False)
+    else:
+        gdown.download(LINK, output=f'{got}/', quiet=True, fuzzy=True)
+
+    found = sorted(got.rglob('*.zip'))
+    if not found:
+        raise SystemExit(
+            'nothing downloaded. Check the folder is shared as "anyone '
+            'with the link" - gdown cannot open a restricted one.')
+    print('fetched:', [z.name for z in found])
+    stage(found)
+
+elif SOURCE == 'drive':
+    if not SAVE_TO_DRIVE:
+        from google.colab import drive
+        drive.mount('/content/drive')
+    src = pathlib.Path(DRIVE_DIR)
+    if not src.exists():
+        raise SystemExit(f'{src} not found')
+    stage(sorted(src.glob('batch_*.zip')))
+
 else:
     from google.colab import files
     up = files.upload()
-    with zipfile.ZipFile(next(iter(up))) as archive:
-        archive.extractall(IN)
+    for name in up:
+        with zipfile.ZipFile(name) as archive:
+            archive.extractall(IN)
+        print('extracted', name)
 
 imgs = sorted(p for p in IN.rglob('*')
               if p.suffix.lower() in {'.png', '.jpg', '.jpeg'})
