@@ -39,6 +39,13 @@ into a run of labels and emitted no marker at all, so dropping
 unreferenced regions would silently lose exactly the figures the reader
 is worst at noticing.
 
+A hand-drawn table therefore tends to appear twice: once as the
+Markdown the reader transcribed from it, and again as a picture. That
+is deliberate and was accepted rather than overlooked. Telling a table
+the reader read correctly from one it quietly mangled is not something
+this stage can do, and deleting the second kind loses an answer, while
+keeping the first kind costs a marker one duplicated glance.
+
 Run:
     python build_booklet.py --engine batch00_new --booklet student_01/cie_1
     python build_booklet.py --engine batch00_new --all
