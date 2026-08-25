@@ -108,9 +108,11 @@ MIN_SIDE = 90
 # drawing. The rules cut a figure into bands, so this reassembles it.
 MERGE_PITCH = 1.6
 
-# A neighbouring line wider than this fraction of the text column is
-# prose, and growing a figure into it loses the paragraph.
-LABEL_WIDTH = 0.78
+# How far past its own strokes a drawing may reach, in rule pitches.
+# Enough for the rows of labels above and below a figure; not enough to
+# swallow the paragraph before it. segment.py bounds its own grid
+# growth the same way and for the same reason.
+GROW_PITCH = 4.0
 
 
 def page_id_of(path):
@@ -126,8 +128,12 @@ def page_id_of(path):
 LABEL = re.compile(r"^\s*([1-9])\s*\.?\s*([a-d])?\s*[).]?\s*(.*)$", re.I)
 
 
-def split_label(text):
-    """('2a', 'HTTP request') for a schema heading, else (None, text)."""
+def split_label(text, seen=()):
+    """('2a', 'HTTP request') for a schema heading, else (None, text).
+
+    `seen` is the labels already assigned in this booklet, which is what
+    decides a bare "1".
+    """
     m = LABEL.match(text)
     if not m:
         return None, text
@@ -140,7 +146,21 @@ def split_label(text):
         return None, text
 
     label = f"{number}{letter}"
-    return (label, rest.strip()) if label in SCHEMA else (None, text)
+    if label not in SCHEMA:
+        return None, text
+
+    # A bare "1" is the one label with no letter to confirm it, so it is
+    # also the one an enumerated list forges. student_01/cie_3 put page
+    # 09 under question 1 on the strength of a "1" written after 2a, 2b
+    # and 2c had already been answered - a list item, not a question.
+    # Booklets run forwards, so a "1" arriving after a later question is
+    # not question 1.
+    if label == "1" and seen:
+        latest = max(SCHEMA.index(q) for q in seen)
+        if latest > SCHEMA.index("1"):
+            return None, text
+
+    return label, rest.strip()
 
 
 def clean_page(body):
@@ -182,16 +202,20 @@ def figure_regions(image_path):
         return bool(line.get("grid")) or (y2 - y1) >= TALL_PITCH * pitch
 
     # A diagram's labels - "client", "Server", "First handshake" - are
-    # ordinary text-height boxes, so the drawn part alone crops to the
-    # middle of the figure with its ends cut off. They are absorbed by
-    # WIDTH: a label is short, a line of prose runs the text column. So
-    # growing stops at the first full-width line, which is what keeps a
-    # figure from eating the paragraph under it.
-    widths = sorted((l["bbox"][2] - l["bbox"][0]) for l in every
-                    if not is_drawn(l))
-    column = widths[len(widths) // 2] if widths else 0
-    label_max = column * LABEL_WIDTH
-
+    # ordinary text-height boxes, so the strokes alone crop to the middle
+    # of the figure with its ends sliced off.
+    #
+    # Width does not separate a label from prose. On s01_c1_p04 the row
+    # under the handshakes is 854px against a 1036px text column, but the
+    # row under THAT is the full 1036 and is still part of the figure - a
+    # width rule keeps one and drops the other, which is how the
+    # termination half of that diagram went missing.
+    #
+    # So growth is bounded by DISTANCE instead, the way segment.py bounds
+    # the same thing: the strokes say where the drawing is, it may reach
+    # a few lines past them, and it may not run away up the page.
+    # Over-reaching puts a caption in the crop; under-reaching loses half
+    # the diagram. The caption is the cheaper mistake.
     found = []
     for i, line in enumerate(every):
         if not is_drawn(line):
@@ -202,6 +226,7 @@ def figure_regions(image_path):
         if (x2 - x1) * (y2 - y1) < MIN_AREA:
             continue
 
+        top, bottom = y1, y2                    # the strokes' own extent
         for step in (-1, 1):                    # grow up, then down
             j = i + step
             while 0 <= j < len(every):
@@ -211,8 +236,9 @@ def figure_regions(image_path):
                     break
                 if min(x2, bx2) <= max(x1, bx1):
                     break                       # not above or below it
-                if not is_drawn(every[j]) and (bx2 - bx1) > label_max:
-                    break                       # a line of prose
+                reach = (by2 - bottom) if step > 0 else (top - by1)
+                if reach > GROW_PITCH * pitch:
+                    break                       # far enough from the strokes
                 x1, y1 = min(x1, bx1), min(y1, by1)
                 x2, y2 = max(x2, bx2), max(y2, by2)
                 j += step
@@ -271,7 +297,7 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
     figures = dest / "figures"
 
     stats = {"pages": 0, "missing": 0, "markers": 0, "matched": 0,
-             "unreferenced": 0, "figures": 0}
+             "unreferenced": 0, "figures": 0, "recovered": 0}
 
     # question label -> list of markdown lines, in page order
     answers = {}
@@ -304,7 +330,7 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
 
             head = HEADING.match(stripped)
             if head:
-                label, title = split_label(head.group(2))
+                label, title = split_label(head.group(2), order)
                 if label:
                     current = label
                     if label not in answers:
@@ -369,10 +395,29 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
     ordered = [q for q in SCHEMA if q in answers]
     ordered += [q for q in order if q not in SCHEMA]
 
+    # Pages written before the first question number appears. A student
+    # starts under "PART-A" without repeating the number, so the opening
+    # answer carries no label - 16 of 250 pages, nearly all of them a
+    # booklet's first page.
+    #
+    # If question 1 was never labelled anywhere, this is question 1: it
+    # comes before whatever the first labelled question is, and the paper
+    # begins at 1. If 1 IS labelled elsewhere, the owner is genuinely
+    # unknown and guessing would file an answer under the wrong question,
+    # so it stays visible and unattached instead.
+    unplaced = []
+    if stray:
+        if ordered and "1" not in answers:
+            answers["1"] = stray + answers.get("1", [])
+            ordered.insert(0, "1")
+            stats["recovered"] = 1
+        else:
+            unplaced = stray
+
     doc = [f"# {student.replace('_', ' ')} — {cie.replace('_', ' ')}", ""]
 
-    if stray:
-        doc += ["## Before the first question number", ""] + stray
+    if unplaced:
+        doc += ["## Before the first question number", ""] + unplaced
 
     for q in ordered:
         doc += [f"## {q})", ""] + answers[q]
