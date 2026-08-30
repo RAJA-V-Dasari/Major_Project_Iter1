@@ -108,8 +108,30 @@ TALL_PITCH = 2.5
 
 # Below this a region is a stray mark - a margin tick, a scanner edge -
 # and cropping it yields a picture of nothing.
-MIN_AREA = 90000
-MIN_SIDE = 90
+#
+# The floor was 90000/90 and that lost exactly the diagrams the reader
+# also fails on. A graph of circled nodes joined by thin edges is a big
+# drawing made of small strokes: on s07_c2_p09 segment.py found the two
+# stroke clusters and both fell under the old floor, so a page whose
+# transcription had already broken down produced no figure either.
+MIN_AREA = 24000
+MIN_SIDE = 45
+
+# A line repeated this many times running is the reader looping rather
+# than the student writing. Kept low because the run is contiguous:
+# nothing legitimate repeats one identical line six times in a row.
+LOOP_RUN = 6
+
+# The repeating unit can be a short block rather than one line, so
+# periods up to this are checked. Four covers a fenced value - fence,
+# value, fence, blank - which is the longest seen here.
+LOOP_PERIOD = 4
+
+# Characters of transcription per unit of ink, above which the reader
+# was generating rather than reading. The corpus median is ~15,000 and
+# audit_pages.py calls 1.9x median "dense"; this sits at 2.7x so only a
+# page that cannot possibly hold its own transcription trips it.
+CONFABULATION_YIELD = 40000
 
 # Vertical gap, in rule pitches, below which two drawn boxes are one
 # drawing. The rules cut a figure into bands, so this reassembles it.
@@ -181,12 +203,17 @@ def split_label(text, seen=()):
 
 
 def clean_page(body):
-    """Strip reader scaffolding; return (lines, list of marker indices).
+    """Strip reader scaffolding.
 
     A whole-page ```markdown wrapper is scaffolding. A fence around PART
     of a page is the student's own block - s07_c2_p08 keeps a Dijkstra
-    working table that way - so only a fence that opens the first line
-    and closes the last is removed.
+    working table that way - so a balanced pair around the whole page is
+    removed and an inner pair is kept.
+
+    A page cut off at the token ceiling has an OPENING fence and no
+    closing one, because the closing fence was never reached. That is
+    not the student's block either, so an unmatched opening fence goes
+    too - otherwise it fences the rest of the booklet.
     """
     lines = body.strip().splitlines()
 
@@ -195,19 +222,83 @@ def clean_page(body):
     while lines and not lines[-1].strip():
         lines.pop()
 
-    if (len(lines) >= 2 and FENCE.match(lines[0].strip())
-            and FENCE.match(lines[-1].strip())
-            and sum(1 for l in lines if FENCE.match(l.strip())) == 2):
+    fences = sum(1 for l in lines if FENCE.match(l.strip()))
+
+    if (len(lines) >= 2 and fences == 2
+            and FENCE.match(lines[0].strip())
+            and FENCE.match(lines[-1].strip())):
         lines = lines[1:-1]
+    elif fences % 2 and lines and FENCE.match(lines[0].strip()):
+        lines = lines[1:]
 
     return lines
 
 
+def loop_start(lines):
+    """Index where the reader stopped reading and began repeating.
+
+    Everything before it is a real transcription and gradeable; the
+    Dijkstra table on s10_c2_p10 is correct right up to the point the
+    page runs out of text. Everything after is invented, and pasting it
+    into a booklet puts 636 empty rows in front of a marker with nothing
+    to say which half to believe.
+
+    The repeating unit is not always one line. On s43_c3_p06 it is a
+    three-line block - a fence, a row of zeroes, a fence - so nothing
+    repeats on consecutive lines and a single-line test sees nothing
+    while 174 fences pile into the booklet. So periods up to a few
+    lines are checked, not just period one.
+
+    Returns None if the page is fine.
+    """
+    # A row of empty cells is the commonest thing a loop repeats, so it
+    # needs a key of its own - collapsing it to "" makes it look like an
+    # ordinary blank line, and blank lines are everywhere and must not
+    # count as evidence.
+    keys = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            keys.append("")
+            continue
+        bare = re.sub(r"[\s|*`-]+", "", stripped)
+        keys.append(bare or "\x00empty-row")
+
+    best = None
+    for period in range(1, LOOP_PERIOD + 1):
+        i = 0
+        while i + period * LOOP_RUN <= len(keys):
+            unit = keys[i:i + period]
+            if any(unit):                                 # not all blank
+                repeats = 1
+                j = i + period
+                while (j + period <= len(keys)
+                       and keys[j:j + period] == unit):
+                    repeats += 1
+                    j += period
+                if repeats >= LOOP_RUN:
+                    best = i if best is None else min(best, i)
+                    break
+                i = j if repeats > 1 else i + 1
+            else:
+                i += 1
+
+    return best
+
+
 def figure_regions(image_path):
-    """Drawn regions on a page, top to bottom, as (x1, y1, x2, y2)."""
+    """(regions, ink) - drawn boxes top to bottom, and the page's ink.
+
+    The ink fraction comes free with the segmentation and is what
+    catches the one loop shape no repetition test can see: a page that
+    invents a NOVEL sequence. s07_c2_p09 produced 36 numbered sections
+    walking the alphabet, every line different, so nothing repeats -
+    but the page carries 0.8% ink and cannot support 1,800 characters
+    whatever they say.
+    """
     record, _, _ = segment.segment_page(image_path)
     if record is None:
-        return []
+        return [], 0.0
 
     pitch = record["rule_pitch"] or 1
 
@@ -262,6 +353,8 @@ def figure_regions(image_path):
 
         found.append((x1, y1, x2, y2))
 
+    ink = record["ink_pixels"] / float(record["size"][0] * record["size"][1])
+
     found.sort(key=lambda b: b[1])
 
     # One drawing arrives as several boxes. segment.py splits on the
@@ -281,7 +374,7 @@ def figure_regions(image_path):
                 continue
         merged.append(box)
 
-    return merged
+    return merged, ink
 
 
 def crop(image_path, box, target, pad=12):
@@ -314,7 +407,8 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
     figures = dest / "figures"
 
     stats = {"pages": 0, "missing": 0, "markers": 0, "matched": 0,
-             "unreferenced": 0, "figures": 0, "recovered": 0}
+             "unreferenced": 0, "figures": 0, "recovered": 0,
+             "truncated": 0, "confabulated": 0}
 
     # question label -> list of markdown lines, in page order
     answers = {}
@@ -331,7 +425,26 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
         stats["pages"] += 1
 
         lines = clean_page(md.read_text(encoding="utf-8"))
-        regions = figure_regions(image)
+
+        # Cut a runaway page at the point it stopped reading. What comes
+        # before is a real transcription and is kept; what comes after is
+        # the model completing its own pattern, and the whole page image
+        # goes in below so a marker can read what was lost.
+        cut = loop_start(lines)
+        if cut is not None:
+            lines = lines[:cut]
+            stats["truncated"] += 1
+
+        regions, ink = figure_regions(image)
+
+        # More text than the page can physically support: the reader was
+        # generating, not reading. Nothing repeats on such a page, so
+        # there is no point to cut at - the whole transcription is
+        # suspect and the image is the only trustworthy record.
+        body_chars = sum(len(l) for l in lines)
+        if ink > 0 and body_chars / ink > CONFABULATION_YIELD:
+            lines, cut = [], 0
+            stats["confabulated"] += 1
 
         marker_at = [i for i, l in enumerate(lines) if MARKER.match(l.strip())]
         stats["markers"] += len(marker_at)
@@ -399,6 +512,23 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
                 emitted.append("")
                 emitted.append(f"![unreferenced figure]({rel})")
 
+        # The whole page, for a page whose reading broke down. The
+        # transcription above it stops where the reading did, so this is
+        # the only record of the rest - and on these pages the geometry
+        # usually misses the figures too, because a graph of circles and
+        # thin edges is sparse enough to fall under the size floor.
+        if cut is not None:
+            rel = f"figures/{pid}_page.png"
+            if crop(image, (0, 0, 10**6, 10**6), dest / rel, pad=0):
+                emitted.append("")
+                emitted.append(f"> **Reading failed partway down this "
+                               f"page.** Everything above is transcribed "
+                               f"from it; the rest was not readable. The "
+                               f"full page is below - mark from the "
+                               f"image, not from the text.")
+                emitted.append("")
+                emitted.append(f"![{pid} full page]({rel})")
+
         body = "\n".join(emitted).strip()
         if not body:
             continue
@@ -451,7 +581,8 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False):
         print(f"{name}: {stats['pages']} pages, {stats['questions']} questions "
               f"{ordered}, {stats['figures']} figures "
               f"({stats['matched']} matched, {stats['unreferenced']} "
-              f"unreferenced), {stats['missing']} pages unread")
+              f"unreferenced), {stats['truncated']} pages cut at a loop, "
+              f"{stats['missing']} unread")
         print(f"  {dest / 'booklet.md'}")
 
     return stats
@@ -496,17 +627,20 @@ def main():
         with open(report, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(["booklet", "pages", "questions", "figures",
-                        "matched", "unreferenced", "missing", "found"])
+                        "matched", "unreferenced", "truncated", "missing",
+                        "found"])
             for r in rows:
                 w.writerow([r["booklet"], r["pages"], r["questions"],
                             r["figures"], r["matched"], r["unreferenced"],
-                            r["missing"], " ".join(r["found"])])
+                            r["truncated"], r["missing"],
+                            " ".join(r["found"])])
 
         print(f"\n{len(rows)} booklets, "
               f"{sum(r['pages'] for r in rows)} pages, "
               f"{sum(r['figures'] for r in rows)} figures "
               f"({sum(r['matched'] for r in rows)} matched to a marker, "
-              f"{sum(r['unreferenced'] for r in rows)} unreferenced)")
+              f"{sum(r['unreferenced'] for r in rows)} unreferenced), "
+              f"{sum(r['truncated'] for r in rows)} pages cut at a loop")
         print(f"  {report}")
         return 0
 
