@@ -1,0 +1,797 @@
+{
+  "cie": 1,
+  "course_code": "25CS5PCCON",
+  "course_title": "Computer Networks",
+  "semester": "V",
+  "max_marks": 40,
+  "date": "2025-09-26",
+  "source": "answer_keys/CIE 1 scheme CN.pdf",
+  "instructions": "Internal choice provided in Part C.",
+  "parts": {
+    "A": 5,
+    "B": 15,
+    "C": 20
+  },
+  "authored": "hand-authored from keys/scheme_pages/cie1_p*.png",
+  "questions": [
+    {
+      "id": "1",
+      "part": "A",
+      "marks": 5,
+      "choice_with": null,
+      "scheme_page": "cie1_p01",
+      "question": "Which of the following devices cannot be a manager station in SNMP? Justify your answer. a. a router  b. a host  c. a switch",
+      "solution": "a. Router - usually participates in SNMP as a managed device (it runs an SNMP agent). It does not normally serve as a manager station, because it is not designed to run NMS software.\nb. Host - a general-purpose computer/workstation/server can be a manager station. It can run SNMP manager software (HP OpenView, Nagios, SolarWinds).\nc. Switch - like a router, a switch is also a managed device with an SNMP agent. It does not act as a manager station.\nTherefore Router and Switch cannot be manager stations, and Host can be a manager station.",
+      "breakdown_source": "inferred",
+      "breakdown_text": "5 marks, no split printed",
+      "rubric": [
+        {
+          "marks": 2.0,
+          "point": "A router cannot be a manager station: it participates as a managed device running an SNMP agent, and is not designed to run NMS software",
+          "exact": [],
+          "keywords": [
+            [
+              "router"
+            ],
+            [
+              "managed device",
+              "agent"
+            ],
+            [
+              "cannot",
+              "not a manager",
+              "does not"
+            ]
+          ]
+        },
+        {
+          "marks": 2.0,
+          "point": "A switch cannot be a manager station: like a router it is a managed device with an SNMP agent",
+          "exact": [],
+          "keywords": [
+            [
+              "switch"
+            ],
+            [
+              "managed device",
+              "agent"
+            ],
+            [
+              "cannot",
+              "not a manager",
+              "does not"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "A host can be a manager station because a general-purpose computer can run SNMP manager / NMS software",
+          "exact": [],
+          "keywords": [
+            [
+              "host"
+            ],
+            [
+              "can be",
+              "manager station"
+            ],
+            [
+              "nms",
+              "manager software",
+              "openview",
+              "nagios",
+              "solarwinds"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": [
+        "A highlighter strip covers the end of one solution line on the scan ('it [is an] SNMP agent'). The sense is not in doubt."
+      ]
+    },
+    {
+      "id": "2a",
+      "part": "B",
+      "marks": 5,
+      "choice_with": null,
+      "scheme_page": "cie1_p01",
+      "question": "Assume there is a server with the domain name www.common.com. a. Show an HTTP request that needs to retrieve the document /usr/users/doc. The client accepts MIME version 1, GIF or JPEG images, but the document should not be more than 4 days old. b. Show the HTTP response to part a for a successful request.",
+      "solution": "Request message:\nGET /usr/users/doc HTTP/1.1\nHost: www.common.com\nMIME-Version: 1.0\nAccept: image/gif, image/jpeg\nIf-Modified-Since: Mon, 22 Sep 2025 12:00:00 GMT\n\nResponse message:\nHTTP/1.1 200 OK\nDate: Fri, 26 Sep 2025 12:00:00 GMT\nServer: Apache/2.4.57 (Unix)\nMIME-Version: 1.0\nContent-Type: image/gif\nContent-Length: 1024\nLast-Modified: Wed, 24 Sep 2025 10:30:00 GMT\nConnection: close",
+      "breakdown_source": "printed",
+      "breakdown_text": "2.5 x2 = 5marks",
+      "rubric": [
+        {
+          "marks": 2.5,
+          "point": "Request message: GET /usr/users/doc HTTP/1.1 with Host, MIME-Version, Accept for gif/jpeg, and If-Modified-Since carrying the 4-day-old constraint",
+          "exact": [
+            "/usr/users/doc",
+            "If-Modified-Since"
+          ],
+          "keywords": [
+            [
+              "get"
+            ],
+            [
+              "host"
+            ],
+            [
+              "accept"
+            ],
+            [
+              "image/gif",
+              "gif"
+            ],
+            [
+              "if-modified-since"
+            ]
+          ]
+        },
+        {
+          "marks": 2.5,
+          "point": "Response message: HTTP/1.1 200 OK with Date, Server, MIME-Version, Content-Type, Content-Length and Last-Modified",
+          "exact": [
+            "200 OK",
+            "Last-Modified",
+            "Content-Length"
+          ],
+          "keywords": [
+            [
+              "200"
+            ],
+            [
+              "content-type"
+            ],
+            [
+              "content-length"
+            ],
+            [
+              "last-modified"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": []
+    },
+    {
+      "id": "2b",
+      "part": "B",
+      "marks": 5,
+      "choice_with": null,
+      "scheme_page": "cie1_p02",
+      "question": "Suppose a client wants to resolve www.example.com. Show the sequence of DNS queries and responses (from root -> TLD -> authoritative server).",
+      "solution": "1. Root server -> referral to .com servers.\n2. .com TLD server -> referral to example.com authoritative servers.\n3. Authoritative server -> actual IP address of www.example.com.\nOr: the local DNS resolver initiates a recursive query: first a query to the root name servers for the .com TLD server address; second a query to the .com TLD name server for the example.com authoritative name server's address; finally a query to the example.com authoritative name server, which provides the IP address for www.example.com.",
+      "breakdown_source": "inferred",
+      "breakdown_text": "5 marks over the three-step sequence; no split printed",
+      "rubric": [
+        {
+          "marks": 2.0,
+          "point": "Query to the root name server returns a referral to the .com TLD servers",
+          "exact": [],
+          "keywords": [
+            [
+              "root"
+            ],
+            [
+              "referral",
+              "refers",
+              "returns",
+              "points"
+            ],
+            [
+              ".com",
+              "tld"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Query to the .com TLD server returns a referral to the example.com authoritative name servers",
+          "exact": [],
+          "keywords": [
+            [
+              "tld",
+              ".com"
+            ],
+            [
+              "authoritative"
+            ],
+            [
+              "referral",
+              "refers",
+              "returns",
+              "address"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Query to the authoritative server returns the actual IP address of www.example.com",
+          "exact": [],
+          "keywords": [
+            [
+              "authoritative"
+            ],
+            [
+              "ip address",
+              "ip"
+            ],
+            [
+              "www.example.com",
+              "example.com"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": [
+        "The scheme accepts either the three-line sequence or the prose recursive-query explanation. Both describe the same three hops."
+      ]
+    },
+    {
+      "id": "2c",
+      "part": "B",
+      "marks": 5,
+      "choice_with": null,
+      "scheme_page": "cie1_p03",
+      "question": "Make use of WWW architecture and explain with example and the various components involved.",
+      "solution": "Components: Client (Browser); Web Server; Hypertext Documents; Protocols; Resource Identifiers - each document has a URL, e.g. https://www.example.com/docs/page1.html where https -> protocol, www.example.com -> domain name, /docs/page1.html -> path to resource.",
+      "breakdown_source": "printed",
+      "breakdown_text": "Explaining above points 1 x 5 = 5 marks",
+      "rubric": [
+        {
+          "marks": 1.0,
+          "point": "Client (browser) as a component of the WWW architecture",
+          "exact": [],
+          "keywords": [
+            [
+              "client",
+              "browser"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Web server as a component",
+          "exact": [],
+          "keywords": [
+            [
+              "web server",
+              "server"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Hypertext documents as a component",
+          "exact": [],
+          "keywords": [
+            [
+              "hypertext",
+              "html",
+              "web page",
+              "document"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Protocols (e.g. HTTP/HTTPS) as a component",
+          "exact": [],
+          "keywords": [
+            [
+              "protocol"
+            ],
+            [
+              "http",
+              "https"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Resource identifiers: each document has a URL, with protocol, domain name and path to the resource",
+          "exact": [],
+          "keywords": [
+            [
+              "url",
+              "uniform resource",
+              "resource identifier"
+            ],
+            [
+              "domain",
+              "path",
+              "protocol"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": []
+    },
+    {
+      "id": "3a",
+      "part": "C",
+      "marks": 10,
+      "choice_with": "3b",
+      "scheme_page": "cie1_p04",
+      "question": "In a network with fixed value for m > 1, we can either use the Go-Back-N or the Selective-Repeat protocol. Describe the advantage and the disadvantage of using each. What other network criteria should be considered to select either of these protocols?",
+      "solution": "Go-Back-N: the advantage is a larger send window, so more packets can be sent before waiting for acknowledgment. The disadvantage is that the receive window size is only 1 - the receiver cannot accept and store out-of-order packets, they are discarded, which means the sender resends them, congesting the network and reducing the capacity of the pipe. [4 marks]\nSelective-Repeat: the advantage is that the receive window can be much larger than 1, which allows out-of-order packets to be stored and avoids resending them. The disadvantage is that the send window size is half of Go-Back-N, so fewer packets can be sent before waiting for the acknowledgment. [4 marks]\nIn summary, if the bandwidth-delay product is large, the reliability is good and the delay is low, choose Go-Back-N to use more of the network capacity. If the bandwidth-delay product is small, or the network is not very reliable, or the network creates long delays, use Selective-Repeat. [2 marks]",
+      "breakdown_source": "printed",
+      "breakdown_text": "[ 4 marks] + [ 4 marks] + [ 2 marks]",
+      "rubric": [
+        {
+          "marks": 4.0,
+          "point": "Go-Back-N: advantage is the larger send window; disadvantage is a receive window of 1, so out-of-order packets are discarded and resent, congesting the network",
+          "exact": [],
+          "keywords": [
+            [
+              "go-back-n",
+              "gbn",
+              "go back n"
+            ],
+            [
+              "send window",
+              "larger window"
+            ],
+            [
+              "receive window",
+              "window size is 1",
+              "window of 1"
+            ],
+            [
+              "out-of-order",
+              "out of order",
+              "discard"
+            ]
+          ]
+        },
+        {
+          "marks": 4.0,
+          "point": "Selective-Repeat: advantage is a receive window larger than 1 that stores out-of-order packets; disadvantage is a send window half that of Go-Back-N",
+          "exact": [],
+          "keywords": [
+            [
+              "selective repeat",
+              "selective-repeat"
+            ],
+            [
+              "receive window"
+            ],
+            [
+              "store",
+              "stores",
+              "buffer"
+            ],
+            [
+              "half",
+              "smaller send window"
+            ]
+          ]
+        },
+        {
+          "marks": 2.0,
+          "point": "Criteria for choosing: a large bandwidth-delay product with good reliability and low delay favours Go-Back-N; a small bandwidth-delay product, poor reliability or long delays favour Selective-Repeat",
+          "exact": [],
+          "keywords": [
+            [
+              "bandwidth-delay",
+              "bandwidth delay"
+            ],
+            [
+              "reliab"
+            ],
+            [
+              "delay"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": []
+    },
+    {
+      "id": "3b",
+      "part": "C",
+      "marks": 10,
+      "choice_with": "3a",
+      "scheme_page": "cie1_p04",
+      "question": "A sender sends a series of packets to the same destination using 5-bit sequence numbers. If the sequence numbers start with 0, what is the sequence number of the 100th packet? In each of the following protocols, how many packets can have independent sequence numbers before wraparound occurs? a. Stop-and-Wait  b. Go-Back-N with m = 8  c. Select-Repeat with m = 8",
+      "solution": "A 5-bit sequence number gives 2^5 = 32 unique sequence numbers, so the range is 0 to 31. The adjusted packet number is divided by 32 and the remainder taken: 100 (mod 32) = 4, so the 100th packet number is 3 because the count starts with 0.\na. Stop-and-Wait: the [0, 1] range is where stop-and-wait operates, so two packets may each have a unique sequence number.\nb. Go-Back-N with m = 8: S = 2^8 - 1 = 255 is the highest possible sequence number. The sequence numbers fall inside [0, 255], which has 256 distinct sequence numbers.\nc. Select-Repeat with m = 8: same 256 distinct sequence numbers; the size of the receive and send windows is 2^(m-1) = 2^7 = 128.",
+      "breakdown_source": "inferred",
+      "breakdown_text": "10 marks over the sequence-number calculation and the three protocols; no split printed",
+      "rubric": [
+        {
+          "marks": 4.0,
+          "point": "A 5-bit sequence number gives 2^5 = 32 values in the range 0 to 31, and the 100th packet's sequence number follows from 100 mod 32",
+          "exact": [
+            "32"
+          ],
+          "keywords": [
+            [
+              "2^5",
+              "32"
+            ],
+            [
+              "0 to 31",
+              "0-31",
+              "31"
+            ],
+            [
+              "mod",
+              "remainder"
+            ]
+          ]
+        },
+        {
+          "marks": 2.0,
+          "point": "Stop-and-Wait: the [0, 1] range, so two packets can have independent sequence numbers",
+          "exact": [],
+          "keywords": [
+            [
+              "stop-and-wait",
+              "stop and wait"
+            ],
+            [
+              "two",
+              "0 and 1",
+              "0,1"
+            ]
+          ]
+        },
+        {
+          "marks": 2.0,
+          "point": "Go-Back-N with m = 8: 2^8 = 256 distinct sequence numbers, highest sequence number 255",
+          "exact": [
+            "256"
+          ],
+          "keywords": [
+            [
+              "go-back-n",
+              "gbn",
+              "go back n"
+            ],
+            [
+              "256"
+            ],
+            [
+              "255",
+              "2^8"
+            ]
+          ]
+        },
+        {
+          "marks": 2.0,
+          "point": "Selective-Repeat with m = 8: 256 distinct sequence numbers with send and receive windows of 2^(m-1) = 128",
+          "exact": [
+            "128"
+          ],
+          "keywords": [
+            [
+              "selective repeat",
+              "select-repeat",
+              "selective-repeat"
+            ],
+            [
+              "128"
+            ],
+            [
+              "2^7",
+              "window"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": [
+        "DEFECT IN THE SCHEME: it prints '100 (mod32) = 4, so the 100th packet number is 3'. 100 mod 32 is indeed 4, but the 100th packet is index 99 and 99 mod 32 = 3. The two sentences disagree; the stated final answer is 3. A student answering 4 is following the scheme's own arithmetic. VERIFY with the examiner before this question's marks are reported."
+      ]
+    },
+    {
+      "id": "4a",
+      "part": "C",
+      "marks": 10,
+      "choice_with": "4b",
+      "scheme_page": "cie1_p05",
+      "question": "i. For each of the following four networks, discuss the consequences if a connection fails. a. Five devices arranged in a mesh topology  b. Five devices in a star topology (not counting the hub)  c. Five devices in a bus topology  d. Five devices in a ring topology.  ii. Examine the role of the UDP header fields in relation to connectionless communication. How do they ensure data integrity without providing reliability?",
+      "solution": "i. a. Mesh: if one connection fails, the other connections will still be working. b. Star: the other devices will still be able to send data through the hub; there will be no access to the device whose connection to the hub failed. c. Bus: all transmission stops if the failure is in the bus; if a drop-line fails, only the corresponding device cannot operate. d. Ring: the failed connection may disable the whole network unless it is a dual ring or there is a by-pass mechanism. [1.5 x 4 = 6 marks]\nii. Source Port and Destination Port: since UDP is connectionless it has no session or connection state; the ports let the sender and receiver applications identify which process should handle the datagram. Length: tells how long the UDP datagram is (header + data), so the receiver knows exactly where the packet ends - important because UDP is carried over IP. Checksum: detects errors introduced during transmission (bit flips, corruption); if the checksum fails the datagram is discarded. This is how UDP ensures data integrity - it verifies the data has not been corrupted. [Diagram 1, ports 1, length 1, checksum 1 = 4 marks]",
+      "breakdown_source": "printed",
+      "breakdown_text": "6+4 (i: 1.5x4 marks = 6 marks; ii: Diagram 1 + source/destination port 1 + length field 1 + checksum 1)",
+      "rubric": [
+        {
+          "marks": 1.5,
+          "point": "Mesh topology: if one connection fails the other connections still work",
+          "exact": [],
+          "keywords": [
+            [
+              "mesh"
+            ],
+            [
+              "still work",
+              "other connection",
+              "unaffected",
+              "continue"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Star topology: other devices still send through the hub; only the device whose link failed loses access",
+          "exact": [],
+          "keywords": [
+            [
+              "star"
+            ],
+            [
+              "hub"
+            ],
+            [
+              "other device",
+              "still",
+              "only"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Bus topology: all transmission stops if the bus fails; a drop-line failure disables only that device",
+          "exact": [],
+          "keywords": [
+            [
+              "bus"
+            ],
+            [
+              "all transmission",
+              "whole network",
+              "stops"
+            ],
+            [
+              "drop line",
+              "drop-line",
+              "only"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Ring topology: a failed connection may disable the whole network unless it is a dual ring or has a bypass mechanism",
+          "exact": [],
+          "keywords": [
+            [
+              "ring"
+            ],
+            [
+              "whole network",
+              "entire network",
+              "disable"
+            ],
+            [
+              "dual ring",
+              "bypass",
+              "by-pass"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "UDP header diagram showing source port, destination port, total length and checksum",
+          "exact": [],
+          "keywords": [
+            [
+              "diagram",
+              "figure",
+              "header format"
+            ]
+          ],
+          "figure": true
+        },
+        {
+          "marks": 1.0,
+          "point": "Source and destination ports identify which process handles the datagram, since UDP is connectionless and keeps no connection state",
+          "exact": [],
+          "keywords": [
+            [
+              "source port"
+            ],
+            [
+              "destination port"
+            ],
+            [
+              "process",
+              "application",
+              "identify"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Length field gives the length of header plus data so the receiver knows where the datagram ends",
+          "exact": [],
+          "keywords": [
+            [
+              "length"
+            ],
+            [
+              "header",
+              "data"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Checksum detects transmission errors and the datagram is discarded if it fails - integrity without reliability",
+          "exact": [],
+          "keywords": [
+            [
+              "checksum"
+            ],
+            [
+              "error",
+              "corrupt"
+            ],
+            [
+              "discard",
+              "integrity"
+            ]
+          ]
+        }
+      ],
+      "chain": null,
+      "notes": []
+    },
+    {
+      "id": "4b",
+      "part": "C",
+      "marks": 10,
+      "choice_with": "4a",
+      "scheme_page": "cie1_p06",
+      "question": "i. The following is a dump of a UDP header in hexadecimal format: 0045DF0000580000. a. What is the source port number?  b. What is the destination port number?  c. What is the total length of the user datagram?  d. What is the length of the data?  e. Is the packet directed from a client to a server or vice versa?  ii. Match the following to one or more layers of the TCP/IP protocol suite: a. Creating user datagram  b. Responsibility for handling frames between adjacent nodes  c. Transforming bits to electromagnetic signals.",
+      "solution": "0045 DF00 0058 0000\na. Source Port = 0045 (hex) = 69\nb. Destination Port = DF00 (hex) = 57088\nc. Length = 0058 (hex) = 88 bytes\nd. Total length - UDP header length = 88 - 8 = 80 bytes\ne. Source Port 69 is a well-known port, therefore it is server to client. [1 x 5 = 5 marks]\nii. a. Creating user datagram -> Transport layer. b. Responsibility for handling frames between adjacent nodes -> link layer / physical layer. c. Transforming bits to electromagnetic signals -> Physical layer. [1.5 x 3 = 4.5 + 0.5 = 5 marks]",
+      "breakdown_source": "printed",
+      "breakdown_text": "i: 1 x5 marks = 5 marks; ii: 1.5 x3 = 4.5+0.5 = 5 marks",
+      "rubric": [
+        {
+          "marks": 1.0,
+          "point": "Source port = 0045 hex = 69",
+          "exact": [
+            "69"
+          ],
+          "keywords": [
+            [
+              "source port"
+            ],
+            [
+              "69"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Destination port = DF00 hex = 57088",
+          "exact": [
+            "57088"
+          ],
+          "keywords": [
+            [
+              "destination port"
+            ],
+            [
+              "57088"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Total length of the user datagram = 0058 hex = 88 bytes",
+          "exact": [
+            "88"
+          ],
+          "keywords": [
+            [
+              "total length",
+              "length"
+            ],
+            [
+              "88"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Length of the data = 88 - 8 = 80 bytes",
+          "exact": [
+            "80"
+          ],
+          "keywords": [
+            [
+              "data"
+            ],
+            [
+              "80"
+            ]
+          ]
+        },
+        {
+          "marks": 1.0,
+          "point": "Source port 69 is a well-known port, so the packet is directed from server to client",
+          "exact": [],
+          "keywords": [
+            [
+              "well known",
+              "well-known"
+            ],
+            [
+              "server to client",
+              "server"
+            ],
+            [
+              "69"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Creating a user datagram is the transport layer",
+          "exact": [],
+          "keywords": [
+            [
+              "user datagram",
+              "datagram"
+            ],
+            [
+              "transport"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Handling frames between adjacent nodes is the data link layer (link/physical)",
+          "exact": [],
+          "keywords": [
+            [
+              "frame"
+            ],
+            [
+              "link",
+              "data link"
+            ]
+          ]
+        },
+        {
+          "marks": 1.5,
+          "point": "Transforming bits to electromagnetic signals is the physical layer",
+          "exact": [],
+          "keywords": [
+            [
+              "bits",
+              "signal",
+              "electromagnetic"
+            ],
+            [
+              "physical"
+            ]
+          ]
+        },
+        {
+          "marks": 0.5,
+          "point": "The scheme's own rounding allowance on part (ii), which prints 1.5 x 3 = 4.5 + 0.5 = 5",
+          "exact": [],
+          "keywords": [
+            [
+              "transport",
+              "link",
+              "physical"
+            ]
+          ],
+          "rounding_allowance": true
+        }
+      ],
+      "chain": null,
+      "notes": [
+        "Part (ii) is printed as '1.5 x3 = 4.5+0.5 = 5 marks'. The 0.5 is a rounding allowance with no stated criterion, so it is carried as its own item rather than smeared across the three matches - that keeps the three real items at the weight the scheme gives them.",
+        "The scheme reasons that source port 69 (well-known, TFTP) means server-to-client. Recorded as printed."
+      ]
+    }
+  ]
+}

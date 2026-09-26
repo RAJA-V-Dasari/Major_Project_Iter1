@@ -1,122 +1,85 @@
-# Handwritten answer scripts to Markdown
+# Major Project — the evaluation half
 
-Turns scanned handwritten exam booklets into one clean Markdown document
-per booklet, ready for marking.
+**Branch: `segmentation-regrouping`. This is a handoff, not a merge.**
 
-61 students x up to 3 CIEs = 153 booklets, 1,231 content pages of
-computer-networks answers.
-
-```
-prepared page  ->  Qwen2.5-VL  ->  Markdown  ->  grouped by question
-                                                  ->  one document per booklet
-```
-
-Measured at **0.099 character error rate** on 15 hand-transcribed pages,
-zero-shot, with no training and no labelled data.
+Pranay — part 2 is here. You read 50 handwritten Computer Networks
+booklets into `question → part → answer`; this marks that output against
+the department's three CIE answer schemes and measures the result
+against the marks the faculty wrote on the covers.
 
 ---
 
-## Read next
+## Start here
 
-| file | what it is |
-|---|---|
-| **[plan.md](plan.md)** | the map - architecture, how to run it, privacy |
-| **[DONE.md](DONE.md)** | what is built, what it scores, the evidence |
-| **[TODO.md](TODO.md)** | what is left, in the order worth doing it |
-| [DATASET.md](DATASET.md) | the Hugging Face card for the prepared corpus |
+| folder | what it is | its handoff |
+|---|---|---|
+| **[`Major_Project_Eval/`](Major_Project_Eval/)** | the evaluation half. Model tier runs on a free Colab T4. | **[HANDOFF.md](Major_Project_Eval/HANDOFF.md)** |
+| **[`Major_Project_Eval_Local/`](Major_Project_Eval_Local/)** | the same project, model tier on your own machine via Ollama. No network calls. | **[HANDOFF.md](Major_Project_Eval_Local/HANDOFF.md)** |
 
----
+They are the same code with one difference — where the model tier runs.
+The prompt is byte-identical between them, so their results are
+comparable. **Pick one and read its `HANDOFF.md` first.** Each one is
+self-contained: setup, how to run it, what it produces, and what to
+consume when you stitch.
 
-## Quick start
-
-```bash
-# one booklet, from markdown already produced
-python modules/05_pipeline/src/run_booklet.py student_07/cie_2 --reader cached
-
-# score an engine against the 15 hand-transcribed pages
-python modules/04_evaluate/src/ocr_bench.py --engine qwen7b --verbose
-
-# group page markdown into one answer per question
-python modules/03_assemble/src/assemble.py --engine qwen7b
-
-# package the corpus for a GPU run
-python modules/02_read/src/prepare_corpus_batches.py
-```
-
-Reading a page is the only stage that needs a GPU. It runs from
-`modules/02_read/read_pages_colab.ipynb` on a free Colab T4, or from any
-machine serving the model over HTTP:
-
-```bash
-python modules/05_pipeline/src/run_booklet.py student_07/cie_2 \
-    --reader server --url http://gpu-box:8000/v1
-```
+If you only want to see the result and not re-run anything, neither
+model tier is needed — the verdicts from the run behind the published
+numbers are committed, and a replay script puts them back.
 
 ---
 
-## Setup
+## What you need that is not in this repo
 
-### Environment
+Two inputs are deliberately not committed. You already have both.
 
-```bash
-uv venv --python 3.11 .venv
-.venv/Scripts/python -m pip install opencv-python-headless numpy
-```
+- **Your handoff corpus** — 187 MB of real students' transcribed answers
+  and page crops. Referenced in place, never copied. Point `MPE_HANDOFF`
+  at it, or drop it at `handoff_Pranay/` where it sits on this machine.
+- **The three scheme PDFs** — the department's material. Point
+  `MPE_SCHEMES` at them, or drop them at `answer_keys/`.
 
-That is the whole local dependency list. **No torch, no transformers.**
-Those left with the TrOCR line-recognition pipeline, which reading whole
-pages replaced - see [DONE.md](DONE.md).
-
-Two optional extras:
-
-- `huggingface_hub` - only for `01_prepare/publish_dataset.py`
-- `llama-cpp-python` - only for `--reader local`, running a GGUF model
-  on CPU with no network
-
-### Data
-
-The pipeline expects prepared pages here:
-
-```
-modules/01_prepare/03_tone/output/student_<NN>/cie_<C>/page_<PP>.png
-```
-
-- `NN` student, 01-61 - `C` CIE, 1-3 - `PP` page, zero-padded
-- all pages 1598x2177, 8-bit greyscale
-- `page_01` is the cover sheet and is skipped everywhere
-
-A directory junction (or symlink) pointing at a corpus elsewhere on disk
-works fine, and is how this is set up locally.
-
-**There is no ingestion script in this repo.** The step that normalised
-the raw Hugging Face download into that tree lived in a `preprocessing/`
-directory that no longer exists; recover it from git history if you need
-to rebuild the corpus from scratch. `01_prepare/` picks up from the
-normalised tree onward: deskew, crop, tone.
-
-The source is a **private** Hugging Face dataset. Ask a team member for
-the repo id and an `HF_TOKEN` with read access, and put it in `.env` at
-the repo root:
-
-```
-HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxx
-```
+Nothing else is missing, and a wrong path gives you a message naming the
+path rather than a stack trace.
 
 ---
 
-## Privacy
+## Where it stands
 
-**Everything generated from this corpus is student work.** `page_01` of
-every booklet is the identity block - name, USN, signature, marks.
+1,221 rubric items across 300 counted questions. 634 decided, **587
+still undecided** — mostly waiting on a person to look at a drawing,
+which `serve.py` in either folder is the tool for.
 
-It is excluded at every stage that touches the corpus: by construction
-in `prepare_corpus_batches.py`, again inside the notebook on arrival,
-and again in `run_booklet.py`. Not once at the start, because "the
-caller already handled it" is exactly the assumption that leaks student
-data to a hosted GPU. That exclusion is the basis on which these pages
-may go to a rented GPU at all.
+Against the examiner on 289 comparable questions: **229 inside (79%)**,
+21 over-settled, 39 under-settled.
 
-Never commit a page image or a transcription of one. `.gitignore`
-covers `input/`, `output/`, `upload/`, `predictions/`, `ground_truth/`,
-`crops/`, `markers/` and `.venv/`; the tracked files are source,
-documentation, the benchmark page selection and the results.
+That 79% is a floor, not a score. Two thirds of the marks are still
+undecided, and every undecided item widens the interval we compare
+against. Each folder's `HANDOFF.md` says this more carefully, and
+`IMPROVEMENTS.md` in each is an honest list of what is weak.
+
+---
+
+## `extra/`
+
+Everything from our side of Iter1 that you do not need for the handoff —
+the reading and assembly modules, the diagram experiment, the old
+planning docs and decks. It is archived rather than deleted so nothing
+is lost, and it includes `major_project_eval_history.bundle`, the git
+history of the evaluation folder from before it moved in here
+(`git clone extra/major_project_eval_history.bundle` to read it).
+
+Nothing in the two evaluation folders depends on anything in `extra/`.
+
+---
+
+## A note on what is not tracked
+
+No student writing is in this repo, and that is enforced rather than
+hoped for. All of each evaluation folder's `output/` is gitignored,
+because every file those projects write quotes a student to justify its
+marking. The single exception is `gold/gold_marks.csv` — pseudonymous
+integers, no names or handwriting, and the one artifact that cannot be
+regenerated by running something.
+
+`handoff_Pranay/`, `answer_keys/`, `ground_truth/` and the page-bearing
+folders under `extra/` are all ignored for the same reason.
