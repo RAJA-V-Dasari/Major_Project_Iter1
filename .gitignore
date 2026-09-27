@@ -195,3 +195,4 @@ Major_Project_Eval_Local/output/
 
 # Build metadata from `pip install -e`
 *.egg-info/
+.claude/
