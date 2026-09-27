@@ -182,3 +182,16 @@ Major_Project_Eval/.venv/
 Major_Project_Eval/output/
 Major_Project_Eval_Local/.venv/
 Major_Project_Eval_Local/output/
+
+# ---------------------------------------------------------------
+# Where the stitched pipeline and scripts/fetch_hf.py put student data.
+# handoff1/ is part 1's output as it lands at the repo root - where
+# paths.py now looks first - and it is every student's answers and page
+# crops. The dataset folders are downloads of the private HF repos (see
+# docs/HUGGING_FACE.md).
+/handoff1/
+/dataset_cleaned/
+/data_hf/
+
+# Build metadata from `pip install -e`
+*.egg-info/

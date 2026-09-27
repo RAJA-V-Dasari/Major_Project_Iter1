@@ -38,7 +38,9 @@ WHAT ELSE IS REFUSED
     queue holding the crops, which is what declining is for.
   * a `zero` on an answer whose evidence is a drawing the model was never
     shown, or a part that lost a page - see `zero_blocked`. Refused into
-    the human queue rather than settled at zero.
+    the human queue rather than settled at zero. A verdict whose `shown`
+    count covers every crop was not blind, so the drawing clause (and
+    only that clause) does not apply to it - see `shown_all`.
 
 Run:
     python src/apply_verdicts.py verdicts.jsonl
@@ -95,7 +97,26 @@ def chain_questions():
 CHAINS = chain_questions()
 
 
-def zero_blocked(question, cie=None):
+def shown_all(question, verdict):
+    """Was this verdict given by a reader that saw every drawing?
+
+    A verdict row may carry `shown`: how many of the answer's crops the
+    reader was actually given (`claude_tier.py --vision` sends them; the
+    text-only readers never do). Only a count covering all of them lifts
+    the blindness that `zero_blocked` and the figure routing guard
+    against - one crop of four is still three unseen.
+    """
+
+    figures = question.get("figures") or 0
+    if figures == 0:
+        # Nothing was cropped, so the only way to see a drawing part 1
+        # missed is the page itself - `pages_seen` records that it was
+        # looked at, rather than taken on the crop count's word.
+        return bool(verdict.get("pages_seen"))
+    return int(verdict.get("shown") or 0) >= figures
+
+
+def zero_blocked(question, cie=None, saw_drawings=False):
     """Was a zero on this question ever the model's to give?
 
     Rule 1 of this project: a cheap tier may award on evidence it finds,
@@ -121,9 +142,15 @@ def zero_blocked(question, cie=None):
     zeroed all five organizations citing the absolute addresses, for two
     students the examiner gave 10/10 and 6/10. Hence this is enforced and
     not requested.
+
+    `saw_drawings` lifts the first clause and only the first: the reason
+    for it is blindness, and a reader that was shown every crop is not
+    blind. The lost page and the chain are unchanged by seeing pixels -
+    the page is still lost, and the chain still needs a person to judge
+    carry-forward against the model's own tendency to cite the key.
     """
 
-    if question.get("figures"):
+    if question.get("figures") and not saw_drawings:
         count = question["figures"]
         return (f"the answer carries {count} drawing(s) the model "
                 "was never shown")
@@ -154,8 +181,8 @@ def load_verdicts(path):
 
 
 def apply(verdicts, dry_run=False):
-    applied, rejected, skipped, refused = [], [], [], []
-    counts = Counter()
+    applied, rejected, skipped, refused, on_drawing = [], [], [], [], []
+    counts, models = Counter(), Counter()
     touched = {}
 
     for path in sorted(paths.MARKS_DIR.glob("*.json")):
@@ -171,30 +198,47 @@ def apply(verdicts, dry_run=False):
                     continue
 
                 counts[verdict.get("verdict", "?")] += 1
+                models[verdict.get("model") or "?"] += 1
 
                 if item["awarded"] is not None:
                     skipped.append((key, "item was already settled by "
                                          f"the {item['tier']} tier"))
                     continue
-                if item["tier"] == "human":
+                saw = shown_all(question, verdict)
+                # grade.py routes an item to a person when its rubric
+                # point IS a drawing, because no text reader can judge
+                # it. A reader that was shown every crop can; one that
+                # was not still cannot.
+                if item["tier"] == "human" and not saw:
                     skipped.append((key, "item belongs to the human tier"))
                     continue
+
+                # Which reader produced this verdict. The model tier has had
+                # more than one (Qwen on Colab, Qwen via Ollama, Claude in
+                # session), and a mark that cannot say which one gave it
+                # cannot be compared against a re-run by another. Recorded
+                # wherever the verdict is, and nowhere it was rejected.
+                model = verdict.get("model") or "unrecorded"
 
                 kind = verdict.get("verdict")
                 if kind == "decline":
                     item["llm_declined"] = verdict.get("reason", "")
+                    item["llm_model"] = model
                     changed = True
                     continue
 
                 if kind == "zero":
-                    blocked = zero_blocked(question, report["cie"])
+                    blocked = zero_blocked(question, report["cie"],
+                                           saw_drawings=saw)
                     if blocked:
                         item["llm_declined"] = (
-                            "the model said zero, but " + blocked)
+                            "the model said zero, but " + blocked
+                            + ". Its reason: " + verdict.get("reason", ""))
+                        item["llm_model"] = model
                         refused.append((key, blocked))
                         changed = True
                         continue
-                    item.update(awarded=0.0, tier="llm",
+                    item.update(awarded=0.0, tier="llm", llm_model=model,
                                 why=verdict.get("reason", "model: zero"),
                                 evidence=[])
                     applied.append((key, 0.0))
@@ -217,15 +261,33 @@ def apply(verdicts, dry_run=False):
 
                 ok, why = quote_supports(verdict.get("quote", ""),
                                          question["answer"])
-                if not ok:
+                crop = verdict.get("crop")
+                page = verdict.get("page")
+                reads = (verdict.get("crop_reads") or "").strip()
+                on_crop = (isinstance(crop, int)
+                           and 0 <= crop < question["figures"])
+                on_page = bool(page) and page in (verdict.get("pages_seen")
+                                                  or [])
+                if not ok and not (saw and reads and (on_crop or on_page)):
                     rejected.append((key, why))
                     continue
 
                 item.update(
-                    awarded=float(marks), tier="llm",
+                    awarded=float(marks), tier="llm", llm_model=model,
                     why=verdict.get("reason", "model: award"),
-                    evidence=[], quote=verdict.get("quote", ""),
+                    evidence=[], quote=verdict.get("quote", "") if ok else "",
                 )
+                if not ok:
+                    # The evidence is a drawing. There is no text to find
+                    # a quote in, so the check above cannot run - what is
+                    # kept instead is WHICH crop and what the reader says
+                    # it shows, so a person can hold one against the other
+                    # in serve.py. Counted separately in the audit, never
+                    # passed off as quote-checked.
+                    item.update(crop=crop if on_crop else None,
+                                page=None if on_crop else page,
+                                crop_reads=reads)
+                    on_drawing.append(key)
                 applied.append((key, float(marks)))
                 changed = True
 
@@ -254,17 +316,26 @@ def apply(verdicts, dry_run=False):
         if touched:
             write_summary()          # grade.py wrote it before we decided
 
-    return applied, rejected, skipped, refused, counts, len(touched)
+    return (applied, rejected, skipped, refused, on_drawing, counts, models,
+            len(touched))
 
 
-def render(applied, rejected, skipped, refused, counts, verdicts):
+def render(applied, rejected, skipped, refused, on_drawing, counts, models,
+           verdicts):
     out = ["# Model tier audit", ""]
     out.append("Generated by `src/apply_verdicts.py`.")
     out.append("")
     out.append(f"- {len(verdicts)} verdicts read")
     for kind, count in counts.most_common():
         out.append(f"  - `{kind}`: {count}")
+    out.append("- read by: " + ", ".join(
+        f"`{model}` ({count})" for model, count in models.most_common()))
     out.append(f"- **{len(applied)} applied**")
+    if on_drawing:
+        out.append(f"  - of which **{len(on_drawing)} awards rest on a "
+                   "drawing** - no text to quote, so the quote check could "
+                   "not run; each names its crop and what it shows, for a "
+                   "person to spot-check in `serve.py`")
     out.append(f"- **{len(rejected)} rejected**")
     out.append(f"- **{len(refused)} zeros refused** and sent to a human")
     out.append(f"- {len(skipped)} skipped (not the model's to decide)")
@@ -329,16 +400,20 @@ def main():
         print(f"{duplicates} item(s) had more than one verdict; "
               "the last was kept")
 
-    applied, rejected, skipped, refused, counts, files = apply(
-        verdicts, dry_run=args.dry_run)
+    (applied, rejected, skipped, refused, on_drawing, counts, models,
+     files) = apply(verdicts, dry_run=args.dry_run)
 
-    report = render(applied, rejected, skipped, refused, counts, verdicts)
+    report = render(applied, rejected, skipped, refused, on_drawing, counts,
+                    models, verdicts)
     if not args.dry_run:
         out = paths.OUT_DIR / "verdict_audit.md"
         out.write_text(report, encoding="utf-8")
 
     print(f"\n{len(verdicts)} verdicts: {dict(counts)}")
-    print(f"  applied  {len(applied)}")
+    print(f"  read by  {dict(models)}")
+    print(f"  applied  {len(applied)}"
+          + (f"  ({len(on_drawing)} on a drawing, not quote-checkable)"
+             if on_drawing else ""))
     print(f"  rejected {len(rejected)}")
     print(f"  refused  {len(refused)} zero(s) the model could not see to give")
     print(f"  skipped  {len(skipped)}")

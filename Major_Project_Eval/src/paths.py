@@ -44,6 +44,7 @@ _HANDOFF_TAIL = ("handoff_Pranay", "home", "pranay", "dev",
 
 _DEFAULT_HANDOFF = _first_existing(
     [
+        ROOT.parent / "handoff1",               # where part 1 writes it, live
         ROOT.parent.joinpath(*_HANDOFF_TAIL),                       # inside Iter1
         ROOT.parent / "Major_Project_Iter1" / Path(*_HANDOFF_TAIL),  # beside it
     ],

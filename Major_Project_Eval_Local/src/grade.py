@@ -203,7 +203,11 @@ def grade_item(item, section, semantic, *, in_chain, th=DEFAULT, sim=None):
     # A drawing is the evidence for this item, and nothing below the
     # human tier reads pixels. Part 1 deliberately never transcribed
     # these; guessing from the surrounding prose would be inventing.
-    if item.get("figure"):
+    # But with no text AND no crop filed under the question there is no
+    # drawing to wait for: the rest of the question is scored unattempted
+    # below, and a person would be sent to look at nothing.
+    empty = not answer.strip() and not (section and section["diagrams"])
+    if item.get("figure") and not empty:
         result.update(
             tier="human",
             why="the evidence for this item is a drawing",

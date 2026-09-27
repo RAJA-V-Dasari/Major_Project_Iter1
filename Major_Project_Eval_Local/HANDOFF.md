@@ -25,10 +25,13 @@ byte-identical to the Colab one — both import it from
 queue records and every downstream check are unchanged. That is a change
 of transport and nothing else.
 
-**You probably do not need to run the model tier at all.** The verdicts
-from the run that produced the published numbers are committed as
-`output/grade_llm_verdicts.jsonl`, and `apply_verdicts.py` replays them
-in seconds. Read the warning below before deciding to regenerate them.
+**The recorded verdicts are not in git.** `output/` is gitignored,
+because every verdict quotes a student, so the Colab run that produced
+the published numbers (`output/grade_llm_verdicts.jsonl`) exists only on
+the machine that ran it. On this machine the model tier was read in
+session by Claude instead (`src/claude_tier.py` ->
+`output/claude_verdicts.jsonl`) - same prompt, same checks, a different
+reader, so its numbers are not a reproduction of the published ones.
 
 ---
 
@@ -104,15 +107,30 @@ Order matters — cheapest tier to most authoritative, each step feeding
 the next.
 
 ```bash
-python src/render_scheme.py                              # scheme PDFs -> PNG
-python src/load_handoff.py --report                      # must match your index.json
-python src/align.py --report                             # unlabelled parts
-
-python src/grade.py --all                                # the ladder
-python src/apply_verdicts.py output/grade_llm_verdicts.jsonl
-python src/apply_human.py                                # replay human decisions
-python src/agreement.py                                  # the deliverable
+python src/render_scheme.py        # scheme PDFs -> PNG (once)
+python src/run_all.py              # everything below, in order
 ```
+
+`run_all.py` is the stitch: it reads part 1's handoff and runs
+
+```bash
+python src/load_handoff.py --report   # must match your index.json
+python src/align.py                   # resolve unlabelled parts -> output/alignment.json
+python src/grade.py --all             # the ladder
+python src/apply_verdicts.py <the verdicts file in output/>
+python src/apply_human.py             # if output/human_marks.jsonl exists
+python src/agreement.py               # the deliverable
+```
+
+stopping at the first step that fails. Two ways this went wrong by hand,
+which is why it is one command now:
+
+- `align.py --report` only *prints* the resolved labels - it returns
+  before writing `output/alignment.json`, so `grade.py` then runs without
+  them (103 unattempted instead of 90, 9 location failures instead of 6).
+  Run `align.py` without `--report`.
+- With more than one verdicts file in `output/` (they come from different
+  readers), `run_all.py` refuses to guess; name one with `--verdicts`.
 
 **`grade.py --all` rewrites every marks file from scratch.** That is how
 the ladder stays reproducible, but it means the last three commands are
@@ -132,7 +150,7 @@ python src/llm_local.py --limit 20   # try 20 before committing to 740
 ```
 
 **This has never been run to completion.** There is no
-`output/local_verdicts.jsonl` in this folder — the committed verdicts are
+`output/local_verdicts.jsonl` in this folder — the recorded verdicts are
 from the Colab run. On a machine without an NVIDIA GPU the full 740-item
 queue is measured in tens of hours, and a model that does not fit in RAM
 does not refuse to load, it swaps and merely looks slow. `llm_local.py`

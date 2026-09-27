@@ -103,6 +103,10 @@ def apply(decisions, dry_run=False):
                             evidence=[])
                 item.pop("quote", None)
                 item.pop("llm_declined", None)
+                item.pop("llm_model", None)
+                item.pop("crop", None)
+                item.pop("page", None)
+                item.pop("crop_reads", None)
                 applied.append((key, marks))
                 changed = True
 

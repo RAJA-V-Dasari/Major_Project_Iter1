@@ -24,10 +24,11 @@ on one machine, read `Major_Project_Eval_Local/HANDOFF.md` instead —
 the prompt and the queue format are byte-identical, so the two produce
 comparable results.
 
-**If you only want to see the result and not re-run anything, you do not
-need either model tier.** The verdicts from the run that produced the
-published numbers are committed as
-`output/grade_llm_verdicts.jsonl`, and `apply_verdicts.py` replays them.
+**The model tier's verdicts are not in git.** `output/` is gitignored,
+because every verdict quotes a student, so the run that produced the
+published numbers (`output/grade_llm_verdicts.jsonl`) exists only on the
+machine that ran it. Without a verdicts file the ladder still runs and
+the model's 740 items stay pending.
 
 ---
 
@@ -102,15 +103,30 @@ Order matters — it goes cheapest tier to most authoritative, and each
 step's output is the next one's input.
 
 ```bash
-python src/render_scheme.py                              # scheme PDFs -> PNG
-python src/load_handoff.py --report                      # must match your index.json
-python src/align.py --report                             # unlabelled parts
-
-python src/grade.py --all                                # the ladder
-python src/apply_verdicts.py output/grade_llm_verdicts.jsonl
-python src/apply_human.py                                # replay human decisions
-python src/agreement.py                                  # the deliverable
+python src/render_scheme.py        # scheme PDFs -> PNG (once)
+python src/run_all.py              # everything below, in order
 ```
+
+`run_all.py` is the stitch: it reads part 1's handoff and runs
+
+```bash
+python src/load_handoff.py --report   # must match your index.json
+python src/align.py                   # resolve unlabelled parts -> output/alignment.json
+python src/grade.py --all             # the ladder
+python src/apply_verdicts.py <the verdicts file in output/>
+python src/apply_human.py             # if output/human_marks.jsonl exists
+python src/agreement.py               # the deliverable
+```
+
+stopping at the first step that fails. Two ways this went wrong by hand,
+which is why it is one command now:
+
+- `align.py --report` only *prints* the resolved labels - it returns
+  before writing `output/alignment.json`, so `grade.py` then runs without
+  them (103 unattempted instead of 90, 9 location failures instead of 6).
+  Run `align.py` without `--report`.
+- With more than one verdicts file in `output/` (they come from different
+  readers), `run_all.py` refuses to guess; name one with `--verdicts`.
 
 **`grade.py --all` rewrites every marks file from scratch.** That is how
 the ladder stays reproducible, but it means the last three commands are

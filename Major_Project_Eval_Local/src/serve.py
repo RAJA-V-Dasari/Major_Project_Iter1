@@ -40,6 +40,17 @@ file is touched. That log is what makes the pipeline replayable: a re-run
 of grade.py wipes the marks back to the ladder's own verdicts, and
 without the log a day of human work would go with it.
 
+MOVING THROUGH THE WORK
+-----------------------
+The index is a worklist: filter to the booklets still undecided, or to
+the ones whose examiner total falls outside our range, and "Continue
+reviewing" opens the first one with work left. On a booklet, "Save & next
+undecided" saves and jumps to the next booklet that still needs a person;
+`n` / `p` do the same from the keyboard and `h` hides questions with
+nothing left to decide. Drawings open full size on click.
+/export/marks.csv and /export/questions.csv give the marks as they stand
+now, including every decision made here since the last pipeline run.
+
 WHAT IT WILL NOT DO
 -------------------
   * bind anything but 127.0.0.1 - the pages quote real students
@@ -55,6 +66,7 @@ Run:
 import argparse
 import csv
 import html
+import io
 import json
 import sys
 from datetime import datetime, timezone
@@ -158,6 +170,34 @@ def open_items(report):
                for i in q["items"] if i["awarded"] is None)
 
 
+def next_open(booklets, index):
+    """The next booklet after `index` that still holds undecided items.
+
+    Wraps round, so the last booklet leads back to the first one left.
+    None when nothing anywhere is undecided.
+    """
+
+    total = len(booklets)
+    for step in range(1, total + 1):
+        candidate = (index + step) % total
+        if open_items(read_report(booklets[candidate])):
+            return candidate
+    return None
+
+
+def standing(report, examiner):
+    """How our range sits against the examiner's total, as a word."""
+
+    ours, pending = report["marks_settled"], report["marks_pending"]
+    if examiner is None:
+        return "none"
+    if not pending and abs(ours - examiner) < 1e-9:
+        return "agreed"
+    if ours - 1e-9 <= examiner <= ours + pending + 1e-9:
+        return "reachable"
+    return "above" if examiner > ours + pending else "below"
+
+
 def retotal(report):
     """Recompute the booklet's settled/pending after a decision lands."""
 
@@ -185,30 +225,33 @@ def record(entry, decisions, note):
     report = read_report(entry)
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    applied = 0
-    paths.OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with open(HUMAN_LOG, "a", encoding="utf-8") as log:
-        for (qindex, index), marks in sorted(decisions.items()):
-            question = report["questions"][qindex]
-            item = question["items"][index]
-            marks = max(0.0, min(float(marks), item["marks_available"]))
-            if item["awarded"] is not None and item["awarded"] == marks:
-                continue                       # nothing actually changed
-            displaced = item["tier"] if item["awarded"] is not None else None
-            log.write(json.dumps({
-                "booklet_id": entry["booklet"], "question": question["id"],
-                "item_index": index, "marks": marks,
-                "marks_available": item["marks_available"],
-                "overrode": displaced, "note": note, "at": stamp,
-            }) + "\n")
-            why = note or "marked by a human, with the drawings"
-            if displaced:
-                why = f"{why} (overrides the {displaced} tier)"
-            item.update(awarded=marks, tier="human", why=why, evidence=[])
-            item.pop("quote", None)
-            applied += 1
+    lines = []
+    for (qindex, index), marks in sorted(decisions.items()):
+        question = report["questions"][qindex]
+        item = question["items"][index]
+        marks = max(0.0, min(float(marks), item["marks_available"]))
+        if item["awarded"] is not None and item["awarded"] == marks:
+            continue                           # nothing actually changed
+        displaced = item["tier"] if item["awarded"] is not None else None
+        lines.append(json.dumps({
+            "booklet_id": entry["booklet"], "question": question["id"],
+            "item_index": index, "marks": marks,
+            "marks_available": item["marks_available"],
+            "overrode": displaced, "note": note, "at": stamp,
+        }) + "\n")
+        why = note or "marked by a human, with the drawings"
+        if displaced:
+            why = f"{why} (overrides the {displaced} tier)"
+        item.update(awarded=marks, tier="human", why=why, evidence=[])
+        for stale in ("quote", "llm_declined", "llm_model", "crop",
+                      "page", "crop_reads"):
+            item.pop(stale, None)              # apply_human drops the same
 
+    applied = len(lines)
     if applied:
+        paths.OUT_DIR.mkdir(parents=True, exist_ok=True)
+        with open(HUMAN_LOG, "a", encoding="utf-8") as log:
+            log.writelines(lines)
         retotal(report)
         with open(entry["path"], "w", encoding="utf-8") as handle:
             json.dump(report, handle, indent=2)
@@ -275,13 +318,52 @@ tr.done td{color:#999}
 a.row{color:#1a4f8a;text-decoration:none;font-weight:600}
 .ok{color:#2f6f3e;font-weight:600}
 .off{color:#9a2f2f;font-weight:600}
+.flash{background:#e7f3e9;border:1px solid #9cc9a5;border-radius:6px;
+       padding:8px 14px;margin-bottom:16px}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 16px}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:#777;text-transform:uppercase;
+           letter-spacing:.06em}
+.filters a{margin-right:14px}
+.filters a.on{color:#ffd479;font-weight:600}
+a.go{background:#2f6f3e;color:#fff;border-radius:6px;padding:8px 16px;
+     text-decoration:none;font-weight:600;display:inline-block}
+button.alt{background:#fff;color:#1a1a1a;border:1px solid #1a1a1a}
+.keys{font-size:12px;color:#777}
+kbd{border:1px solid #bbb;border-radius:3px;padding:0 4px;font-size:11px;
+    background:#fafafa}
+body.hide-decided .q.decided{display:none}
+figure a{display:block}
+"""
+
+# Keyboard: n / p move between booklets that still need work, h hides the
+# questions with nothing left to decide. None of it fires while typing.
+SCRIPT = """
+<script>
+(function(){
+  var b=document.body, key='hideDecided';
+  try{ if(localStorage.getItem(key)==='1') b.classList.add('hide-decided'); }catch(e){}
+  window.toggleDecided=function(){
+    b.classList.toggle('hide-decided');
+    try{ localStorage.setItem(key, b.classList.contains('hide-decided')?'1':'0'); }catch(e){}
+  };
+  document.addEventListener('keydown',function(ev){
+    var t=ev.target.tagName;
+    if(t==='INPUT'||t==='TEXTAREA'||ev.ctrlKey||ev.metaKey||ev.altKey) return;
+    var link=document.querySelector('[data-key="'+ev.key+'"]');
+    if(link){ ev.preventDefault(); link.click(); }
+    if(ev.key==='h' && window.toggleDecided){ toggleDecided(); }
+  });
+})();
+</script>
 """
 
 
 def page(title, body):
     return ("<!doctype html><html><head><meta charset='utf-8'>"
             f"<title>{html.escape(title)}</title><style>{CSS}</style>"
-            f"</head><body>{body}</body></html>").encode("utf-8")
+            f"</head><body>{body}{SCRIPT}</body></html>").encode("utf-8")
 
 
 def mark_controls(field, avail, current):
@@ -305,7 +387,7 @@ def mark_controls(field, avail, current):
     return "<div class='controls'>" + "".join(out) + "</div>"
 
 
-def render_booklet(index, total, entry, report):
+def render_booklet(index, total, entry, report, next_index=None, saved=None):
     e = html.escape
     booklet = entry["booklet"]
     rows = counted(report)
@@ -331,9 +413,11 @@ def render_booklet(index, total, entry, report):
         + (f" (+{pending:g} pending)" if pending else "")
         + f" / {available:g}</span>{verdict}"
         f"<span class='sp'>booklet {index + 1} of {total}</span>"
-        f"<a href='/b/{max(0, index - 1)}'>&larr; prev</a>"
+        f"<a href='/b/{max(0, index - 1)}' data-key='p'>&larr; prev</a>"
         f"<a href='/b/{min(total - 1, index + 1)}'>next &rarr;</a>"
-        f"<a href='/'>index</a></header>"
+        + (f"<a href='/b/{next_index}' data-key='n'>next undecided "
+           "&rarr;</a>" if next_index is not None else "")
+        + "<a href='/?show=todo'>worklist</a></header>"
     )
 
     jump = ["<nav>"]
@@ -342,9 +426,18 @@ def render_booklet(index, total, entry, report):
         cls = " class='open'" if left else ""
         jump.append(f"<a href='#q{qindex}'{cls}>Q{e(question['id'])}"
                     + (f" ({left})" if left else "") + "</a>")
-    jump.append("</nav>")
+    jump.append("<a href='#' onclick='toggleDecided();return false' "
+                "style='float:right'>show / hide decided questions</a>"
+                "<span class='keys' style='float:right;margin-right:14px'>"
+                "<kbd>n</kbd> next undecided &middot; <kbd>p</kbd> prev "
+                "&middot; <kbd>h</kbd> hide decided</span></nav>")
 
     body = [f"<form method='post' action='/decide/{index}'><main>"]
+    if saved is not None:
+        body.append("<div class='flash'>"
+                    + (f"Saved {saved} change(s)." if saved else
+                       "Saved - nothing had changed.")
+                    + "</div>")
 
     for qindex, question in rows:
         examiner = entry["marks"][qindex]
@@ -361,7 +454,8 @@ def render_booklet(index, total, entry, report):
             compare = f"<span class='off'>examiner {examiner:g}</span>"
 
         body.append(
-            f"<div class='q' id='q{qindex}'><div class='qhead'>"
+            f"<div class='q{'' if left else ' decided'}' id='q{qindex}'>"
+            "<div class='qhead'>"
             f"<b>Q{e(question['id'])}</b>"
             f"<span>part {e(str(question['part']))} &middot; {avail:g} marks"
             "</span>"
@@ -380,10 +474,13 @@ def render_booklet(index, total, entry, report):
             body.append(f"<h3 style='margin-top:18px'>{len(crops)} drawing(s)"
                         "</h3>")
             for n, crop in enumerate(crops):
+                src = f"/crop/{index}/{qindex}/{n}"
                 body.append(
-                    f"<figure><img src='/crop/{index}/{qindex}/{n}' "
-                    f"loading='lazy'><figcaption>page "
-                    f"{e(str(crop.get('page_id')))}</figcaption></figure>")
+                    f"<figure><a href='{src}' target='_blank' "
+                    f"title='open full size'><img src='{src}' "
+                    f"loading='lazy'></a><figcaption>drawing {n + 1} "
+                    f"&middot; page {e(str(crop.get('page_id')))} "
+                    "&middot; click to enlarge</figcaption></figure>")
         elif question["figures"]:
             body.append("<p class='empty'>Recorded as having "
                         f"{question['figures']} drawing(s), but the crops "
@@ -397,20 +494,29 @@ def render_booklet(index, total, entry, report):
         for n, item in enumerate(question["items"]):
             avail_i = item["marks_available"]
             field = f"{qindex}_{n}"
+            reader = (f" ({e(item['llm_model'])})"
+                      if item.get("llm_model") else "")
             if item["awarded"] is not None:
                 quote = item.get("quote")
+                if not quote and item.get("crop_reads"):
+                    where = (f"drawing {item['crop'] + 1}"
+                             if item.get("crop") is not None
+                             else f"page {item.get('page')}")
+                    quote = (f"[{where}, not quote-checked] "
+                             f"{item['crop_reads']}")
                 body.append(
                     "<div class='item settled'>"
                     f"<div class='pt'>{e(item['point'])}</div>"
                     f"<div class='meta'><b>{item['awarded']:g}/{avail_i:g}"
-                    f"</b> &middot; {e(item['tier'])} tier &middot; "
+                    f"</b> &middot; {e(item['tier'])} tier{reader} &middot; "
                     f"{e(str(item.get('why') or ''))}</div>"
                     + (f"<div class='quote'>{e(quote)}</div>" if quote else "")
                     + mark_controls(field, avail_i, item["awarded"])
                     + "</div>")
             else:
                 declined = item.get("llm_declined")
-                note = (f"the model was refused here: {e(str(declined))}"
+                note = (f"the model{reader} was refused here: "
+                        f"{e(str(declined))}"
                         if declined else
                         f"undecided &middot; reached the {e(item['tier'])} "
                         "tier")
@@ -424,52 +530,146 @@ def render_booklet(index, total, entry, report):
     body.append("</main><div class='bar'><input type='text' name='note' "
                 "placeholder='why (optional, recorded with every mark you "
                 "change on this page)'>"
-                "<button type='submit'>Save this booklet</button>"
+                "<button type='submit' name='go' value='stay' class='alt'>"
+                "Save</button>"
+                "<button type='submit' name='go' value='next'>"
+                "Save &amp; next undecided</button>"
                 f"<span>{open_items(report)} item(s) still undecided</span>"
                 "</div></form>")
 
     return page(booklet, head + "".join(jump) + "".join(body))
 
 
-def render_index(booklets):
+FILTERS = [("all", "all booklets"), ("todo", "still undecided"),
+           ("off", "outside the examiner's total"), ("done", "fully decided")]
+
+STATUS_HTML = {
+    "none": "<span class='empty'>no examiner total</span>",
+    "agreed": "<span class='ok'>agreed exactly</span>",
+    "reachable": "reachable",
+    "above": "<span class='off'>above our range</span>",
+    "below": "<span class='off'>below our range</span>",
+}
+
+
+def render_index(booklets, show="all"):
     e = html.escape
-    done = agreed = 0
-    rows = []
+    show = show if show in dict(FILTERS) else "all"
+    counts = {"done": 0, "agreed": 0, "off": 0, "items_left": 0,
+              "items": 0, "settled": 0.0, "pending": 0.0}
+    rows, first_open = [], None
     for index, entry in enumerate(booklets):
         report = read_report(entry)
         left = open_items(report)
-        if not left:
-            done += 1
-        ours = report["marks_settled"]
-        pending = report["marks_pending"]
+        items = sum(len(q["items"]) for _, q in counted(report))
+        state = standing(report, entry["examiner_total"])
+        counts["items"] += items
+        counts["items_left"] += left
+        counts["settled"] += report["marks_settled"]
+        counts["pending"] += report["marks_pending"]
+        counts["done"] += not left
+        counts["agreed"] += state == "agreed"
+        counts["off"] += state in ("above", "below")
+        if left and first_open is None:
+            first_open = index
+
+        if show == "todo" and not left:
+            continue
+        if show == "done" and left:
+            continue
+        if show == "off" and state not in ("above", "below"):
+            continue
+
         ex = entry["examiner_total"]
-        if ex is None:
-            status = "<span class='empty'>no examiner total</span>"
-        elif not pending and abs(ours - ex) < 1e-9:
-            status = "<span class='ok'>agreed exactly</span>"
-            agreed += 1
-        elif ours - 1e-9 <= ex <= ours + pending + 1e-9:
-            status = "reachable"
-        else:
-            status = ("<span class='off'>"
-                      + ("above" if ex > ours + pending else "below")
-                      + " our range</span>")
+        progress = 100 * (items - left) / items if items else 100
         rows.append(
             f"<tr{' class=done' if not left else ''}>"
             f"<td><a class='row' href='/b/{index}'>{e(entry['booklet'])}</a>"
-            f"</td><td>{entry['cie']}</td><td>{ours:g}</td>"
-            f"<td>{pending:g}</td>"
+            f"</td><td>{entry['cie']}</td>"
+            f"<td>{report['marks_settled']:g}</td>"
+            f"<td>{report['marks_pending']:g}</td>"
             f"<td>{'-' if ex is None else format(ex, 'g')}</td>"
-            f"<td>{left or ''}</td><td>{status}</td></tr>")
+            f"<td>{left or ''}</td><td>{progress:.0f}%</td>"
+            f"<td>{STATUS_HTML[state]}</td></tr>")
 
-    head = ("<header><b>Human review</b>"
-            f"<span>{len(booklets)} booklets</span></header>"
-            f"<nav>{done} fully decided &middot; {agreed} agreeing with the "
-            "examiner exactly</nav>")
-    table = ("<main><table><tr><th>booklet</th><th>CIE</th><th>ours</th>"
+    decided = counts["items"] - counts["items_left"]
+    head = ("<header><b>Marking review</b>"
+            f"<span>{len(booklets)} booklets</span><span class='sp'></span>"
+            "<a href='/export/marks.csv'>download marks CSV</a>"
+            "<a href='/export/questions.csv'>per-question CSV</a></header>"
+            "<nav class='filters'>"
+            + "".join(f"<a href='/?show={key}'"
+                      + (" class='on'" if key == show else "")
+                      + f">{label}</a>" for key, label in FILTERS)
+            + "</nav>")
+
+    stats = ("<div class='stats'>"
+             f"<div class='stat'><b>{decided} / {counts['items']}</b>"
+             "<span>rubric items decided</span></div>"
+             f"<div class='stat'><b>{counts['items_left']}</b>"
+             "<span>items waiting for you</span></div>"
+             f"<div class='stat'><b>{counts['done']}</b>"
+             "<span>booklets fully decided</span></div>"
+             f"<div class='stat'><b>{counts['agreed']}</b>"
+             "<span>agree with examiner exactly</span></div>"
+             f"<div class='stat'><b>{counts['off']}</b>"
+             "<span>outside examiner's total</span></div>"
+             "</div>")
+    start = (f"<p><a class='go' href='/b/{first_open}' data-key='n'>"
+             "Continue reviewing &rarr;</a> <span class='keys'>or press "
+             "<kbd>n</kbd></span></p>" if first_open is not None else
+             "<p class='ok'>Every rubric item is decided.</p>")
+
+    table = ("<table><tr><th>booklet</th><th>CIE</th><th>ours</th>"
              "<th>pending</th><th>examiner</th><th>undecided</th>"
-             "<th>status</th></tr>" + "".join(rows) + "</table></main>")
-    return page("Human review", head + table)
+             "<th>done</th><th>status</th></tr>" + "".join(rows)
+             + "</table>" if rows else
+             "<p class='empty'>Nothing matches this filter.</p>")
+    return page("Marking review",
+                head + "<main>" + stats + start + table + "</main>")
+
+
+def export_csv(booklets, per_question):
+    """The marks as they stand right now, for a spreadsheet.
+
+    Built from the marks files on each request, so it includes every
+    decision saved in this tool - unlike output/summary.csv, which only
+    changes when the pipeline is re-run.
+    """
+
+    out = io.StringIO()
+    writer = csv.writer(out)
+    if per_question:
+        writer.writerow(["booklet_id", "cie", "question", "part",
+                         "marks_available", "ours_settled", "pending",
+                         "examiner", "undecided_items"])
+    else:
+        writer.writerow(["booklet_id", "cie", "ours_settled", "pending",
+                         "max_marks", "examiner_total", "status",
+                         "undecided_items"])
+    for entry in booklets:
+        report = read_report(entry)
+        if per_question:
+            for qindex, question in counted(report):
+                examiner = entry["marks"][qindex]
+                writer.writerow([
+                    entry["booklet"], report["cie"], question["id"],
+                    question["part"], question["marks_available"],
+                    question["marks_settled"], question["marks_pending"],
+                    "" if examiner is None else examiner,
+                    sum(1 for i in question["items"]
+                        if i["awarded"] is None)])
+        else:
+            rows = counted(report)
+            writer.writerow([
+                entry["booklet"], report["cie"], report["marks_settled"],
+                report["marks_pending"],
+                sum(q["marks_available"] for _, q in rows),
+                "" if entry["examiner_total"] is None
+                else entry["examiner_total"],
+                standing(report, entry["examiner_total"]),
+                open_items(report)])
+    return out.getvalue().encode("utf-8")
 
 
 # ------------------------------------------------------------- handler
@@ -493,18 +693,36 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        route = urlparse(self.path).path.strip("/").split("/")
+        url = urlparse(self.path)
+        route = url.path.strip("/").split("/")
+        query = parse_qs(url.query)
 
         if route == [""]:
-            return self.send(render_index(self.booklets))
+            show = (query.get("show") or ["all"])[0]
+            return self.send(render_index(self.booklets, show))
 
         if route[0] == "b" and len(route) == 2 and route[1].isdigit():
             index = int(route[1])
             if not 0 <= index < len(self.booklets):
                 return self.send(b"no such booklet", "text/plain", 404)
             entry = self.booklets[index]
-            return self.send(render_booklet(index, len(self.booklets), entry,
-                                            read_report(entry)))
+            saved = (query.get("saved") or [None])[0]
+            return self.send(render_booklet(
+                index, len(self.booklets), entry, read_report(entry),
+                next_open(self.booklets, index),
+                int(saved) if saved and saved.isdigit() else None))
+
+        if route[0] == "export" and len(route) == 2 and route[1] in (
+                "marks.csv", "questions.csv"):
+            body = export_csv(self.booklets, route[1] == "questions.csv")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             f"attachment; filename={route[1]}")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         if route[0] == "crop" and len(route) == 4:
             return self.serve_crop(*route[1:])
@@ -567,8 +785,13 @@ class Handler(BaseHTTPRequestHandler):
                     continue
 
         note = (form.get("note") or [""])[0].strip()
-        record(entry, decisions, note)
-        self.redirect(f"/b/{index}")
+        applied = record(entry, decisions, note)
+        if (form.get("go") or ["stay"])[0] == "next":
+            following = next_open(self.booklets, index)
+            if following is None:
+                return self.redirect("/?show=all")
+            return self.redirect(f"/b/{following}?saved={applied}")
+        self.redirect(f"/b/{index}?saved={applied}")
 
 
 def check(booklets):
