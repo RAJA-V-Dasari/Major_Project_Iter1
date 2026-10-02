@@ -1,8 +1,8 @@
 r"""
 Run the model tier on this machine instead of on a free Colab T4.
 
-    output/queue_llm.jsonl  ->  output/local_verdicts.jsonl
-                            ->  python src/apply_verdicts.py output/local_verdicts.jsonl
+    data/marking/queue_llm.jsonl  ->  data/marking/local_verdicts.jsonl
+                            ->  python marking/src/apply_verdicts.py data/marking/local_verdicts.jsonl
 
 WHAT CHANGED, AND WHAT DELIBERATELY DID NOT
 -------------------------------------------
@@ -36,7 +36,7 @@ be compared. `--compare` does that comparison.
 THIS IS SLOW, AND THE SLOWNESS IS THE POINT OF --limit
 ------------------------------------------------------
 740 items, a ~1,200-token prompt each. On two cores that is measured in
-tens of hours, not minutes. Run `python src/setup_local.py` first: it
+tens of hours, not minutes. Run `python marking/src/setup_local.py` first: it
 times the actual machine on one real item and multiplies, rather than
 guessing. `--limit` exists so you can get a defensible sample overnight
 instead of a full run over a week.
@@ -45,11 +45,11 @@ Every verdict is flushed as it is produced and re-running resumes, so
 stopping with Ctrl-C costs one item.
 
 Run:
-    python src/setup_local.py                  # check the machine first
-    python src/llm_local.py --check            # backend + model, mark nothing
-    python src/llm_local.py --limit 25         # a sample
-    python src/llm_local.py                    # the whole queue, resumable
-    python src/llm_local.py --compare          # local vs the recorded Colab run
+    python marking/src/setup_local.py                  # check the machine first
+    python marking/src/llm_local.py --check            # backend + model, mark nothing
+    python marking/src/llm_local.py --limit 25         # a sample
+    python marking/src/llm_local.py                    # the whole queue, resumable
+    python marking/src/llm_local.py --compare          # local vs the recorded Colab run
 """
 
 import argparse
@@ -222,7 +222,7 @@ def make_backend(args):
 
 
 def load_queue(path):
-    paths.require(path, "the model queue (run src/grade.py --all first)")
+    paths.require(path, "the model queue (run marking/src/grade.py --all first)")
     with open(path, encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
 
@@ -347,8 +347,8 @@ def run(args, backend, records, out_path, done):
     print(f"\n{marked} marked in {fmt_duration(elapsed)} -> {out_path}")
     print("verdicts:", dict(counts))
     print("\nNext:")
-    print(f"    python src/apply_verdicts.py {out_path} --dry-run")
-    print(f"    python src/apply_verdicts.py {out_path}")
+    print(f"    python marking/src/apply_verdicts.py {out_path} --dry-run")
+    print(f"    python marking/src/apply_verdicts.py {out_path}")
 
 
 def compare(out_path, reference):
@@ -415,7 +415,7 @@ def main():
     parser.add_argument("--threads", type=int, default=None,
                         help="llama-cpp only; defaults to all cores")
     parser.add_argument("--out", default=None,
-                        help="verdicts file (default output/local_verdicts.jsonl)")
+                        help="verdicts file (default data/marking/local_verdicts.jsonl)")
     parser.add_argument("--booklet", action="append", default=None,
                         metavar="BOOKLET_ID",
                         help="mark only this booklet; repeatable. Unlike "
@@ -454,7 +454,7 @@ def main():
                 "not in the queue: " + ", ".join(sorted(unknown)) + "\n"
                 "A booklet with nothing queued is not an error upstream - it "
                 "means the cheap tiers settled all of it, or grade.py has not "
-                "run since. Check output/queue_llm.jsonl."
+                "run since. Check data/marking/queue_llm.jsonl."
             )
         records = [r for r in records if r["booklet_id"] in wanted]
         print(f"restricted to {len(wanted)} booklet(s): "

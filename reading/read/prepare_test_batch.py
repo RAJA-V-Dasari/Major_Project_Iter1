@@ -1,9 +1,9 @@
 """
 Package a small diagnostic batch: every page that broke, plus controls.
 
-    01_prepare/03_tone/output/  (prepared pages)
-        -> 02_read/upload/batch_test.zip
-        -> 02_read/upload/TEST_BATCH.csv
+    data/pages/  (prepared pages)
+        -> data/read/batches/batch_test.zip
+        -> data/read/batches/TEST_BATCH.csv
 
 WHY A HAND-PICKED BATCH AND NOT A RANDOM SAMPLE
 -----------------------------------------------
@@ -14,7 +14,7 @@ two pages each.
 
 So every page here is one whose behaviour is already known and
 recorded, and the run either changes it or does not. See
-`modules/02_read/BATCH00_REVIEW.md` for what each did.
+`reading/docs/BATCH00_REVIEW.md` for what each did.
 
 WHY THE CONTROLS MATTER AS MUCH AS THE FAILURES
 -----------------------------------------------
@@ -26,21 +26,23 @@ pages that came back correct and must still come back correct - if
 rows, the rewrite has overshot.
 
 Run:
-    python prepare_test_batch.py
+    python reading/read/prepare_test_batch.py
 """
 
 import argparse
 import csv
 import re
+import sys
 import zipfile
 from pathlib import Path
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-MODULES = STAGE_DIR.parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-CLEAN = MODULES / "01_prepare" / "03_tone" / "output"
-OUT_DIR = STAGE_DIR / "upload"
+from common import layout                                  # noqa: E402
+
+CLEAN = layout.PAGES
+OUT_DIR = layout.BATCHES
 
 COVER_PAGE = 1
 

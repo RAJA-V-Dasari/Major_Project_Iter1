@@ -1,12 +1,12 @@
 """
 The model tier, read in session by Claude instead of a local 7B.
 
-    python src/claude_tier.py --status
-    python src/claude_tier.py --next 12            # the next answers to mark
-    python src/claude_tier.py --ingest batch.jsonl  # record the verdicts
+    python marking/src/claude_tier.py --status
+    python marking/src/claude_tier.py --next 12            # the next answers to mark
+    python marking/src/claude_tier.py --ingest batch.jsonl  # record the verdicts
 
-    output/queue_llm.jsonl  ->  output/claude_verdicts.jsonl
-                            ->  python src/apply_verdicts.py output/claude_verdicts.jsonl
+    data/marking/queue_llm.jsonl  ->  data/marking/claude_verdicts.jsonl
+                            ->  python marking/src/apply_verdicts.py data/marking/claude_verdicts.jsonl
 
 WHY THIS EXISTS
 ---------------
@@ -48,13 +48,13 @@ per batch instead of once per answer.
 
 THE SECOND PASS: SHOWN THE DRAWINGS
 -----------------------------------
-    python src/claude_tier.py --vision-next 8
-    python src/claude_tier.py --vision-ingest batch.jsonl
+    python marking/src/claude_tier.py --vision-next 8
+    python marking/src/claude_tier.py --vision-ingest batch.jsonl
 
 The first pass is text-only, like every model-tier reader before it,
 and declines wherever the evidence would be in a drawing. The second
 pass takes what is still pending after `apply_verdicts.py`, renders each
-answer's crops into contact sheets under `output/claude_sheets/`, and is
+answer's crops into contact sheets under `data/marking/claude_sheets/`, and is
 read with the sheets open. Its rows are labelled
 `claude-opus-5-5 (in session, shown the drawings)` and carry `shown`,
 the number of crops the reader was given, which is the only thing that
@@ -409,7 +409,7 @@ def vision_ingest(path):
     print(f"wrote {written} verdict(s) -> {VERDICTS}")
     for key, why in bad:
         print(f"  REJECTED {key}: {why}")
-    print("now: python src/apply_verdicts.py output/claude_verdicts.jsonl")
+    print("now: python marking/src/apply_verdicts.py data/marking/claude_verdicts.jsonl")
 
 
 def main():

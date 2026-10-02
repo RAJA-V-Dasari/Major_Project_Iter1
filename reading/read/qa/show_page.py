@@ -1,11 +1,17 @@
 """Export prepared pages as scaled PNGs for visual review.
 
-    python modules/02_read/src/show_page.py s08_c2_p03 s08_c2_p06 --out DIR
+    python reading/read/qa/show_page.py s08_c2_p03 s08_c2_p06 --out DIR
+
+DIR receives readable images of student pages: keep it under data/.
 """
-import argparse, pathlib, re
+import argparse, pathlib, re, sys
 from PIL import Image
 
-PAGES = pathlib.Path("modules/01_prepare/03_tone/output")
+sys.path.insert(0, str(next(p for p in pathlib.Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
+from common import layout                                  # noqa: E402
+
+PAGES = layout.PAGES
 STEM = re.compile(r"^s(\d+)_c(\d+)_p(\d+)$")
 
 

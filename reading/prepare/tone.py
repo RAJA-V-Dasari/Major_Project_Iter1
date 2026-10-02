@@ -1,7 +1,11 @@
 """
 Flatten the illumination and normalise the tone of every cropped page.
 
-    03_tone/input/  (deskewed + cropped)  ->  03_tone/output/
+    data/prepare/02_crop/  (deskewed + cropped)  ->  data/pages/
+
+The output IS the prepared corpus - the same pages as the `cleaned`
+Hugging Face repo - so everything downstream reads data/pages/ whether
+the pages were fetched or rebuilt here.
 
 Two steps, in this order:
 
@@ -41,25 +45,27 @@ Pixels only. Size, deskew and crop are earlier stages' work, so
 anything mapped onto the cropped pages stays valid.
 
 Run:
-    python tone.py --preview      # before/after pairs, no writes
-    python tone.py                # whole corpus
+    python reading/prepare/tone.py --preview   # before/after pairs, no writes
+    python reading/prepare/tone.py             # whole corpus
 """
 
 import argparse
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
+from common import layout                                  # noqa: E402
 
-SOURCE_DIR = STAGE_DIR / "input"
-OUT_DIR = STAGE_DIR / "output"
-PREVIEW_DIR = STAGE_DIR / "preview"
+SOURCE_DIR = layout.PREPARE / "02_crop"
+OUT_DIR = layout.PAGES
+PREVIEW_DIR = layout.PREPARE / "preview" / "03_tone"
 
 # Size of the local background estimate. Must comfortably exceed the
 # widest dark mark, or that mark becomes its own background and fades

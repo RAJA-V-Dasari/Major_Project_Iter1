@@ -33,8 +33,12 @@ out marks for coincidence. Short numeric values are therefore reported
 for a human to confirm rather than silently trusted.
 
 Run:
-    python src/validate_keys.py
-    python src/validate_keys.py --cie 2 --verbose
+    python marking/src/validate_keys.py
+    python marking/src/validate_keys.py --cie 2 --verbose
+    python marking/src/validate_keys.py --no-renders   # no scheme PDFs here
+
+--no-renders skips only the scheme_page check, for a machine that does
+not hold the department's PDFs. Everything else still has to pass.
 """
 
 import argparse
@@ -70,7 +74,7 @@ class Report:
         return not self.errors
 
 
-def check_key(key, report, verbose=False):
+def check_key(key, report, verbose=False, renders=True):
     cie = key["cie"]
     where_key = f"cie{cie}"
 
@@ -99,7 +103,7 @@ def check_key(key, report, verbose=False):
 
         # --- the scheme page must exist ---------------------------
         page = paths.SCHEME_PAGES / f"{spec['scheme_page']}.png"
-        if not page.exists():
+        if renders and not page.exists():
             report.error(
                 where, f"scheme_page {spec['scheme_page']} not rendered"
             )
@@ -229,6 +233,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cie", type=int, choices=[1, 2, 3])
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--no-renders", action="store_true",
+                        help="skip the check that each scheme_page is "
+                             "rendered (no scheme PDFs on this machine)")
     args = parser.parse_args()
 
     pattern = f"cie{args.cie}.json" if args.cie else "cie*.json"
@@ -249,7 +256,8 @@ def main():
             continue
 
         items += sum(len(q["rubric"]) for q in key["questions"])
-        check_key(key, report, verbose=args.verbose)
+        check_key(key, report, verbose=args.verbose,
+                  renders=not args.no_renders)
 
     print()
     for warning in report.warnings:

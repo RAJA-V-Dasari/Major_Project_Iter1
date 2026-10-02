@@ -16,7 +16,7 @@ A looped page is the one that hides. Its output is non-empty, so the
 notebook's resume rule counts it as done and never revisits it; without
 this check it enters the corpus silently truncated.
 
-    python modules/02_read/src/check_batch.py modules/02_read/output/batch00
+    python reading/read/qa/check_batch.py data/read/qwen7b
 """
 import argparse, collections, io, pathlib, re, sys
 

@@ -1,7 +1,7 @@
 # OCR benchmark results
 
 All 15 pages of `bench_pages.json` hand-transcribed. Scored with
-`src/ocr_bench.py`: Markdown scaffolding normalised away, diagram
+`ocr_bench.py` (beside this file): Markdown scaffolding normalised away, diagram
 placeholders excluded, and a short table of rendering equivalences
 folded (`EQUIVALENT`), so this measures reading and not formatting.
 

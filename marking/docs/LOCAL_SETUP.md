@@ -1,24 +1,25 @@
 # Running the model tier on this machine
 
-This copy of the project removes the one step that did not run locally.
-In the original, four tiers ran on the laptop and the fifth — the model
-tier — ran on a free Colab T4, reached by uploading a notebook and
-downloading a file. Here it runs on the same machine as everything else.
+The model tier has three routes: a free Colab T4, this machine, or
+Claude in session. This page is the local route, which takes the one
+step that did not run locally and runs it on the same machine as
+everything else. The marking half was first built for Colab, and was
+briefly kept as two folders, one per route. It is one package now.
 
-Nothing else changed. If you only want the commands, skip to
+If you only want the commands, skip to
 [The short version](#the-short-version).
 
 ---
 
-## What actually changed
+## What going local changes
 
-| | original | this copy |
+| | Colab route | local route |
 |---|---|---|
 | where the model runs | free Colab T4 | this machine, on CPU |
-| how it is reached | upload a notebook, download a file | `python src/llm_local.py` |
+| how it is reached | upload a notebook, download a file | `python marking/src/llm_local.py` |
 | model | Qwen2.5-7B-Instruct, 4-bit (bitsandbytes/nf4) | Qwen2.5-7B-Instruct, GGUF Q4_K_M |
 | prompt | defined in `make_llm_notebook.py` | defined in `llm_prompt.py`, **byte-identical** |
-| verdicts land in | `output/grade_llm_verdicts.jsonl` | `output/local_verdicts.jsonl` |
+| verdicts land in | `data/marking/grade_llm_verdicts.jsonl` | `data/marking/local_verdicts.jsonl` |
 | the checks after it | `apply_verdicts.py` | unchanged |
 
 Three of those rows are the whole design:
@@ -32,7 +33,7 @@ records, including the 275 that carry a chain note and the 438 that
 carry a figure note.
 
 **The verdicts land beside the recorded run, never on top of it.**
-`output/grade_llm_verdicts.jsonl` is the Colab run that the project's
+`data/marking/grade_llm_verdicts.jsonl` is the Colab run that the project's
 published numbers come from. A local run writes `local_verdicts.jsonl`
 instead, and `llm_local.py` refuses to append to a verdicts file written
 by a different model unless you say `--allow-mixed-models`. That refusal
@@ -74,7 +75,7 @@ runs on the items they share.
 Run this first. It measures rather than assumes:
 
 ```bash
-python src/setup_local.py
+python marking/src/setup_local.py
 ```
 
 On the laptop this copy was made on it reports:
@@ -101,7 +102,7 @@ twenty times slower than it should be. That is the failure this page
 exists to warn about, and the reason `--time-it` exists:
 
 ```bash
-python src/setup_local.py --time-it
+python marking/src/setup_local.py --time-it
 ```
 
 It marks one real item off the real queue and multiplies by what is
@@ -178,16 +179,16 @@ ollama pull qwen2.5:3b-instruct-q4_K_M      # the practical choice here
 ### 4. Check before you commit hours to it
 
 ```bash
-python src/setup_local.py --time-it
-python src/llm_local.py --check
-python src/llm_local.py --dry-run           # see the exact prompt
+python marking/src/setup_local.py --time-it
+python marking/src/llm_local.py --check
+python marking/src/llm_local.py --dry-run           # see the exact prompt
 ```
 
 ### 5. Mark
 
 ```bash
-python src/llm_local.py --limit 25          # a sample first, always
-python src/llm_local.py                     # the rest, resumable
+python marking/src/llm_local.py --limit 25          # a sample first, always
+python marking/src/llm_local.py                     # the rest, resumable
 ```
 
 Every verdict is flushed as it is produced. Ctrl-C costs you one item,
@@ -196,9 +197,9 @@ and re-running picks up where it stopped.
 ### 6. Apply, exactly as before
 
 ```bash
-python src/apply_verdicts.py output/local_verdicts.jsonl --dry-run
-python src/apply_verdicts.py output/local_verdicts.jsonl
-python src/agreement.py
+python marking/src/apply_verdicts.py data/marking/local_verdicts.jsonl --dry-run
+python marking/src/apply_verdicts.py data/marking/local_verdicts.jsonl
+python marking/src/agreement.py
 ```
 
 `--dry-run` first is not ceremony. It tells you how many awards will be
@@ -208,7 +209,7 @@ run that was 15.4% of them.
 ### 7. See what the change cost
 
 ```bash
-python src/llm_local.py --compare
+python marking/src/llm_local.py --compare
 ```
 
 ---
@@ -218,11 +219,11 @@ python src/llm_local.py --compare
 A 3B model is not the model the project's published numbers came from,
 and its verdicts are not interchangeable with them. If you run it:
 
-- Keep them in their own file (`--out output/local_3b_verdicts.jsonl`)
+- Keep them in their own file (`--out data/marking/local_3b_verdicts.jsonl`)
   so nothing silently mixes two models into one experiment.
 - Say which model produced the marks wherever you report them. Every row
   carries a `model` field for exactly this reason, and
-  `output/verdict_audit.md` reports per-model.
+  `data/marking/verdict_audit.md` reports per-model.
 - Expect the quote-rejection rate to be **worse**, not better. Quoting
   verbatim from a long passage is the part small models are worst at,
   and it is the thing `apply_verdicts.py` checks hardest. That rejection
@@ -242,7 +243,7 @@ If installing Ollama is not an option, run a GGUF file in-process:
 
 ```bash
 pip install llama-cpp-python
-python src/llm_local.py --backend llama-cpp --gguf C:\models\qwen2.5-7b-instruct-q4_k_m.gguf
+python marking/src/llm_local.py --backend llama-cpp --gguf C:\models\qwen2.5-7b-instruct-q4_k_m.gguf
 ```
 
 Same prompt, same output file, same downstream. It is the fallback
@@ -260,7 +261,7 @@ or start the Ollama app. Set `OLLAMA_HOST` if it listens elsewhere.
 **`model not pulled`** — the error names the exact `ollama pull` command.
 
 **It is far slower than `--time-it` predicted.** You are swapping. Close
-the browser and re-run `python src/setup_local.py` to see the real
+the browser and re-run `python marking/src/setup_local.py` to see the real
 budget, then drop to the 3B model.
 
 **Every verdict comes back `decline` with "model produced no JSON".**

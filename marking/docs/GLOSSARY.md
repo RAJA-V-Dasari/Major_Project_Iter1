@@ -119,8 +119,11 @@ demonstrable defect.
 
 ### handoff
 
-Part 1's output — 187 MB of booklets, pages and crops. **Referenced in
-place, never copied into this repo.** Override with `MPE_HANDOFF`.
+Part 1's output: every booklet as `question → part → answer`, with its
+page images and drawing crops. `python pipeline.py handoff` writes it to
+`data/handoff/`, which is gitignored like the rest of `data/`. Set
+`MPE_HANDOFF` to mark a handoff that lives elsewhere. The contract is
+[`../../docs/HANDOFF.md`](../../docs/HANDOFF.md).
 
 ### inside
 
@@ -239,7 +242,7 @@ accepted characters that the rubric's keywords scored 0.00 on.
 
 ### recorded run
 
-`output/grade_llm_verdicts.jsonl` — the Colab run of the model tier that
+`data/marking/grade_llm_verdicts.jsonl` — the Colab run of the model tier that
 every published number in this repo comes from. Kept intact. A local run
-writes `output/local_verdicts.jsonl` beside it, and `llm_local.py`
+writes `data/marking/local_verdicts.jsonl` beside it, and `llm_local.py`
 refuses to append one model's verdicts to another's file.

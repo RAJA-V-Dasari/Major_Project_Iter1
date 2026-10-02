@@ -1,6 +1,8 @@
 """
 Detect the printed ruled-line grid on a cropped page.
 
+    python reading/prepare/tools/grid.py     # print the grid on a few crops
+
 Reusable per-page tool, not part of the crop itself: the grid's phase
 (position of line 1 relative to the true page top) varies by up to
 ~30px page to page - real variance in paper printing/binding, not
@@ -110,10 +112,15 @@ def detect_rule_lines(gray):
 
 def preview():
 
+    import sys
     from pathlib import Path
 
-    stage_dir = Path(__file__).resolve().parent.parent
-    out_dir = stage_dir / "output"
+    sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                                if (p / "common" / "layout.py").exists())))
+
+    from common import layout
+
+    out_dir = layout.PREPARE / "02_crop"
 
     picks = [
         "student_61/cie_3/page_05.png",

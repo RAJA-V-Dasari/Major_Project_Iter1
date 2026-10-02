@@ -1,12 +1,12 @@
 """
 The GPU, as a URL. Deploy once, then the laptop drives the whole pipeline.
 
-    modal deploy modules/02_read/src/modal_vllm.py
-    python modules/05_pipeline/src/run_booklet.py --all \
+    modal deploy reading/read/modal_vllm.py
+    python pipeline.py read --all \
         --reader server --url https://<workspace>--mp-read-server.modal.run/v1
 
-That is the entire change. `ServerReader` in `05_pipeline/src/readers.py`
-already speaks OpenAI `/chat/completions`, and `run_booklet.py` already
+That is the entire change. `ServerReader` in `reading/read/readers.py`
+already speaks OpenAI `/chat/completions`, and `read_pages.py` already
 takes `--url`, so nothing downstream of this file moves. The notebook
 round trip - zip the corpus, upload to Drive, babysit a session, download
 the markdown - is replaced by an HTTPS call.
@@ -16,7 +16,7 @@ WHY A SERVER AND NOT A MODAL FUNCTION PER PAGE
 Fanning out with `Function.map()` over 1,000 pages would be faster, but
 it would put a second copy of the reading logic in this repo, and the
 prompt would have to be restated here. The prompt lives once, in
-`make_colab_notebook.py`, and `run_booklet.py` imports it. A vLLM server
+`make_colab_notebook.py`, and `read_pages.py` imports it. A vLLM server
 is prompt-agnostic: it never sees the prompt until the client sends it,
 so deploying this file cannot make the prompt drift from the one the
 0.099 CER was measured with.
@@ -36,8 +36,9 @@ Batch the pages; do not send one and walk away.
 
 WHY L40S AND NOT T4
 -------------------
-Because 48GB ends the quantization. Every number in DONE.md was measured
-with the 7B in 4-bit, because that is what fits in a T4's 16GB, and 4-bit
+Because 48GB ends the quantization. Every number in reading/docs/DONE.md
+was measured with the 7B in 4-bit, because that is what fits in a T4's
+16GB, and 4-bit
 is a quality ceiling nobody chose - it was the hardware. In bf16 the same
 model is ~16.5GB of weights and has room for the KV cache and the vision
 tower beside it. Dropping to `gpu="T4"` below still works and still needs
@@ -46,8 +47,9 @@ tower beside it. Dropping to `gpu="T4"` below still works and still needs
 THE PIXEL BUDGET IS LOAD-BEARING
 --------------------------------
 `--mm-processor-kwargs` carries the same 256-1024 patch budget as
-`make_colab_notebook.py`. Read the Colab OOM in DONE.md before touching
-it: the budget was once set on the chat message instead of the processor,
+`make_colab_notebook.py`. Read the Colab OOM in reading/docs/DONE.md
+before touching it: the budget was once set on the chat message instead
+of the processor,
 no resize happened, a page became ~4,437 visual tokens and attention
 asked a T4 for 18.85 GiB. vLLM honours it here because it sits on the
 processor. Changing it changes what the model sees, which invalidates the
@@ -63,7 +65,7 @@ secret and `ServerReader` sends it as a bearer token:
 
 then put the same value in `VLM_API_KEY` in the local environment, which
 `ServerReader` already reads. `page_01` exclusion is unaffected - it is
-enforced in `run_booklet.py`, upstream of every reader, and stays there.
+enforced in `read_pages.py`, upstream of every reader, and stays there.
 """
 
 import json
@@ -118,7 +120,7 @@ class Server:
 
         cmd = [
             "vllm", "serve", MODEL_NAME,
-            # run_booklet.py defaults --model to this exact string
+            # read_pages.py defaults --model to this exact string
             "--served-model-name", MODEL_NAME,
             "--host", "0.0.0.0",
             "--port", str(VLLM_PORT),

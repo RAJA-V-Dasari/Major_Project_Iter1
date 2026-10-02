@@ -1,9 +1,9 @@
 """
 Part 2 end to end, on part 1's handoff, in the one order that is right.
 
-    python src/run_all.py
-    python src/run_all.py --verdicts output/claude_verdicts.jsonl
-    python src/run_all.py --no-semantic
+    python marking/src/run_all.py
+    python marking/src/run_all.py --verdicts data/marking/claude_verdicts.jsonl
+    python marking/src/run_all.py --no-semantic
 
     handoff1/  ->  load_handoff  ->  align  ->  grade --all
                ->  apply_verdicts (each file)  ->  apply_human  ->  agreement
@@ -14,7 +14,7 @@ Every step here already exists and each is correct on its own. What went
 wrong was the order, twice:
 
   * `align.py --report` prints the resolved labels and returns before
-    writing `output/alignment.json`. The run order in HANDOFF.md used
+    writing `data/marking/alignment.json`. The run order in the old HANDOFF.md used
     `--report`, so `grade.py` ran without the resolved labels - 103
     unattempted instead of 90, and 9 location failures instead of 6 -
     and nothing said so.
@@ -97,15 +97,21 @@ def main():
          "grade.py", "--all", *(["--no-semantic"] if args.no_semantic else []))
 
     if not verdicts:
-        print("\n=== model tier: no verdicts file - its 740 items stay pending")
+        queue = paths.OUT_DIR / "queue_llm.jsonl"
+        waiting = (sum(1 for line in open(queue, encoding="utf-8")
+                       if line.strip()) if queue.exists() else 0)
+        print(f"\n=== model tier: no verdicts file - its {waiting} queued "
+              "item(s) stay pending")
+        print("    (run one: marking/src/llm_local.py, the Colab notebook "
+              "from make_llm_notebook.py, or claude_tier.py)")
     for path in verdicts:
         step(f"model tier: {path.name}", "apply_verdicts.py", str(path))
 
     if (paths.OUT_DIR / "human_marks.jsonl").exists():
         step("human tier", "apply_human.py")
     else:
-        print("\n=== human tier: no output/human_marks.jsonl yet "
-              "(python src/serve.py writes it)")
+        print("\n=== human tier: no data/marking/human_marks.jsonl yet "
+              "(python marking/src/serve.py writes it)")
 
     step("agreement with the examiner", "agreement.py")
 

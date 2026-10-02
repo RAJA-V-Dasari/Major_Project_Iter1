@@ -10,17 +10,18 @@ it.
 
 ## Before anything: where the data is
 
-**The corpus is not in this repo.** It is 187 MB of real students'
-scripts, referenced in place rather than copied — a second copy is a
-second thing to keep gitignored, a second thing to leak, and 187 MB that
-can drift from the original.
+**The corpus is not in git.** Every booklet is a real student's
+scripts, so the handoff, and everything marking writes about it, lives
+under the gitignored data root (see `common/layout.py`):
 
-`src/paths.py` resolves two roots, both overridable:
-
-| variable | default | holds |
+| path | override | holds |
 |---|---|---|
-| `MPE_HANDOFF` | `../Major_Project_Iter1/handoff_Pranay/.../handoff1` | part 1's booklets, pages and crops |
-| `MPE_SCHEMES` | `../Major_Project_Iter1/answer_keys` | the three scheme PDFs |
+| `data/handoff/` | `MPE_HANDOFF` | part 1's booklets, pages and crops (`python pipeline.py handoff` writes it) |
+| `data/schemes/` | `MPE_SCHEMES` | the three scheme PDFs (the department's, never committed) |
+| `data/marking/` | `MP_DATA` moves all of `data/` | everything this half writes |
+
+`MPE_HANDOFF` is for marking a handoff that lives elsewhere. For
+example, the one part 1 shipped in September as `handoff1/`:
 
 ```powershell
 $env:MPE_HANDOFF = "D:\somewhere\handoff1"
@@ -32,14 +33,16 @@ bare `FileNotFoundError` three frames deep.
 
 ### Install
 
+From the repo root:
+
 ```bash
-uv venv && uv pip install -e .        # laptop tiers only
-uv pip install -e ".[semantic]"       # adds the embedding tier
+pip install -e .                      # laptop tiers only
+pip install -e ".[semantic]"          # adds the embedding tier
 ```
 
-The split is deliberate. The base install has no ML stack at all —
-`pymupdf`, `pillow`, `numpy`. `grade.py --no-semantic` must keep working
-so the ladder degrades rather than breaks when the extra is absent.
+The split is deliberate. The base install has no ML stack at all.
+`grade.py --no-semantic` must keep working, so that the ladder degrades
+rather than breaks when the extra is absent.
 
 ---
 
@@ -53,9 +56,9 @@ alignment is resolved before questions are matched to it.
 ### Stage 1 — the rubric
 
 ```bash
-python src/render_scheme.py               # scheme PDFs -> PNG
-python src/validate_keys.py               # rubric arithmetic + structure
-python src/make_verify_sheet.py           # the human sign-off sheet
+python marking/src/render_scheme.py               # scheme PDFs -> PNG
+python marking/src/validate_keys.py               # rubric arithmetic + structure
+python marking/src/make_verify_sheet.py           # the human sign-off sheet
 ```
 
 | step | proves |
@@ -77,8 +80,8 @@ right claim. **Re-run `make_verify_sheet.py` after any edit to a key.**
 ### Stage 2 — the examiner's marks
 
 ```bash
-python src/crop_covers.py                 # cover marks grids
-python src/gold_check.py                  # the examiner's own arithmetic
+python marking/src/crop_covers.py                 # cover marks grids
+python marking/src/gold_check.py                  # the examiner's own arithmetic
 ```
 
 `crop_covers.py` cuts the marks grid out of each cover page. The crop
@@ -114,9 +117,9 @@ a human has actually looked.
 ### Stage 3 — load and align
 
 ```bash
-python src/load_handoff.py --report       # must match part 1's totals
-python src/align.py --report              # what to confirm
-python src/align.py                       # write the proposals
+python marking/src/load_handoff.py --report       # must match part 1's totals
+python marking/src/align.py --report              # what to confirm
+python marking/src/align.py                       # write the proposals
 ```
 
 `load_handoff.py --report` is a contract check against part 1. Three
@@ -148,25 +151,25 @@ is assigned automatically**; `grade.py` reads only the confirmed ones.
 ### Stage 4 — mark
 
 ```bash
-python src/grade.py --all                       # the ladder
-python src/grade.py --all --no-semantic         # ...without torch
-python src/grade.py --booklet student_01_cie_2 --verbose
+python marking/src/grade.py --all                       # the ladder
+python marking/src/grade.py --all --no-semantic         # ...without torch
+python marking/src/grade.py --booklet student_01_cie_2 --verbose
 ```
 
-Writes `output/marks/*.json`, `output/summary.csv`,
-`output/queue_llm.jsonl`, `output/queue_human.jsonl`.
+Writes `data/marking/marks/*.json`, `data/marking/summary.csv`,
+`data/marking/queue_llm.jsonl`, `data/marking/queue_human.jsonl`.
 
 Roughly two minutes for all booklets with the semantic tier on.
 
 ### Stage 5 — calibrate
 
 ```bash
-python src/calibrate.py                   # sweep and write the report
-python src/calibrate.py --quick           # coarse
+python marking/src/calibrate.py                   # sweep and write the report
+python marking/src/calibrate.py --quick           # coarse
 ```
 
 Sweeps the five thresholds against the examiner's marks and writes
-`output/calibration.md`. It reports a **frontier, not a winner**:
+`data/marking/calibration.md`. It reports a **frontier, not a winner**:
 loosening settles more marks and makes more irreversible errors.
 
 The selection rule is *fewest irreversible errors, then most decisive* —
@@ -181,28 +184,35 @@ earn and no later tier can take it back.
 ### Stage 6 — the model tier
 
 ```bash
-python src/setup_local.py --time-it       # measure this machine first
-python src/llm_local.py --check           # backend and model are really there
-python src/llm_local.py --dry-run         # the exact prompt, sent nowhere
-python src/llm_local.py --limit 25        # a sample
-python src/llm_local.py                   # the rest, resumable
-python src/apply_verdicts.py output/local_verdicts.jsonl --dry-run
-python src/apply_verdicts.py output/local_verdicts.jsonl
-python src/llm_local.py --compare         # local vs the recorded Colab run
+python marking/src/setup_local.py --time-it       # measure this machine first
+python marking/src/llm_local.py --check           # backend and model are really there
+python marking/src/llm_local.py --dry-run         # the exact prompt, sent nowhere
+python marking/src/llm_local.py --limit 25        # a sample
+python marking/src/llm_local.py                   # the rest, resumable
+python marking/src/apply_verdicts.py data/marking/local_verdicts.jsonl --dry-run
+python marking/src/apply_verdicts.py data/marking/local_verdicts.jsonl
+python marking/src/llm_local.py --compare         # local vs the recorded Colab run
 ```
 
-**This is the one stage that differs from `Major_Project_Eval`.** There
-the tier ran on a free Colab T4, reached by uploading a notebook; here it
-runs on this machine through a local Qwen2.5. The notebook path still
-works (`make_llm_notebook.py`) and is still the fastest route to all 740
-items if you have a GPU session — the two are alternatives, not
-replacements, which is what makes `--compare` worth having.
+**The tier has three routes, and they are alternatives, not
+replacements.**
 
-What did **not** change is the reason the tier was ever shaped this way:
-it is a queue on disk, not an in-process call. Queue records are
-self-contained by design, so whatever marks them needs no access to this
-repo and none to the corpus. Swapping Colab for a local model therefore
-cost one file and no change to the ladder.
+- **Colab.** `make_llm_notebook.py` writes the notebook, which you upload
+  the queue to on a free T4. It is still the fastest way through a full
+  queue if you have a GPU session.
+- **Local.** `llm_local.py` runs Qwen2.5 through Ollama or llama.cpp on
+  this machine (the commands above).
+- **In session.** `claude_tier.py` lets Claude read the queue in a Claude
+  Code session, with a second pass shown the drawings.
+
+`--compare` exists because the routes are expected to disagree, and the
+disagreement should be measured rather than assumed.
+
+What makes the routes interchangeable is the reason the tier was shaped
+this way at all: it is a queue on disk, not an in-process call. Queue
+records are self-contained by design, so whatever marks them needs no
+access to this repo and none to the corpus. Adding a route costs one
+file and no change to the ladder.
 
 The prompt is byte-identical to the Colab one, imported by both from
 [`../src/llm_prompt.py`](../src/llm_prompt.py). Verified against all 740
@@ -227,25 +237,25 @@ takes a week while looking identical from the outside.
 `decline` is not a failure. It sends the item to the human queue holding
 the crops, which is what declining is for.
 
-Writes `output/verdict_audit.md` and updates `output/marks/*.json`
+Writes `data/marking/verdict_audit.md` and updates `data/marking/marks/*.json`
 **in place**.
 
 ### Stage 7 — the human tier
 
 ```bash
-python src/serve.py --check               # the crops are really on disk
-python src/serve.py                       # http://127.0.0.1:8000
-python src/serve.py --port 8080
+python marking/src/serve.py --check               # the crops are really on disk
+python marking/src/serve.py                       # http://127.0.0.1:8000
+python marking/src/serve.py --port 8080
 ```
 
 One booklet a page, with the drawings. Every decision is appended to
-`output/human_marks.jsonl` **before** the marks file is rewritten, so
+`data/marking/human_marks.jsonl` **before** the marks file is rewritten, so
 the log is the record and the marks file is the derived state.
 
 ### Stage 8 — the deliverable
 
 ```bash
-python src/agreement.py                   # -> output/agreement.md
+python marking/src/agreement.py                   # -> data/marking/agreement.md
 ```
 
 ---
@@ -253,7 +263,7 @@ python src/agreement.py                   # -> output/agreement.md
 ## The re-run graph — what invalidates what
 
 This is the part that is easy to get wrong, because several stages write
-into `output/marks/*.json` **in place** and nothing recomputes
+into `data/marking/marks/*.json` **in place** and nothing recomputes
 downstream reports automatically.
 
 ```
@@ -276,7 +286,7 @@ edit a key ──> validate_keys ──> make_verify_sheet ──> grade --all
 Three consequences:
 
 1. **`grade.py --all` is destructive to the tiers above it.** It
-   regenerates `output/marks/*.json` from scratch. Every applied model
+   regenerates `data/marking/marks/*.json` from scratch. Every applied model
    verdict and every human decision in those files is gone. The record
    survives in `human_marks.jsonl` and the verdicts file, but replaying
    them is a manual re-run of stages 6 and 7.
@@ -288,7 +298,7 @@ Three consequences:
 
 ### Vintage of the committed run
 
-The `output/` directory in this working copy was not produced in one
+The `data/marking/` directory in this working copy was not produced in one
 pass. From file timestamps:
 
 | written | file | by |

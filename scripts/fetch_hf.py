@@ -3,10 +3,15 @@ Import answer scripts (or any private dataset repo) from Hugging Face.
 
     python scripts/fetch_hf.py --list                         # what is there
     python scripts/fetch_hf.py                                # cleaned pages
-    python scripts/fetch_hf.py --repo raw --students 1-5 --cie 2
-    python scripts/fetch_hf.py --repo <org>/<name> --out handoff1
+    python scripts/fetch_hf.py --students 1-5 --cie 2         # a subset
+    python scripts/fetch_hf.py --repo raw --students 7        # raw scans
+    python scripts/fetch_hf.py --repo <org>/<name> --out data/handoff
 
-    HF repo  ->  local folder (gitignored)  ->  part 1 / part 2
+    HF repo  ->  data/ (gitignored)  ->  the pipeline
+
+    cleaned  ->  data/pages/    prepared pages, what the reader reads
+    raw      ->  data/raw/      untouched scans, what `prepare` reads
+    other    ->  data/hf/<name>/
 
 The two answer-script repos are FOLDER datasets, not Parquet tables:
 
@@ -15,8 +20,8 @@ The two answer-script repos are FOLDER datasets, not Parquet tables:
                                                students.csv, the roster)
 
 so importing them is downloading files, and `--students` / `--cie` just
-narrow which paths are fetched. See docs/HUGGING_FACE.md for the format
-and the other ways in.
+narrow which paths are fetched. See docs/DATA.md for the format and the
+other ways in.
 
 PRIVACY, ENFORCED HERE RATHER THAN HOPED FOR
 --------------------------------------------
@@ -24,36 +29,25 @@ PRIVACY, ENFORCED HERE RATHER THAN HOPED FOR
   examiner's marks. It is skipped unless you pass --with-covers.
 * students.csv (names and USNs) is skipped unless --with-roster.
 * The token is read from HF_TOKEN or the repo's .env and never printed.
-* The default destinations are gitignored. Anything under --out that you
-  point elsewhere is your responsibility to keep out of git.
+* The default destinations are under data/, which is gitignored. Anything
+  under --out that you point elsewhere is your responsibility to keep out
+  of git.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
+
+from common import layout                                  # noqa: E402
 
 REPOS = {
     "raw": "prss-majorproject-37/Handwritten-AnswerScripts-MajorProject",
     "cleaned": "prss-majorproject-37/cleaned-handwritten-answerscripts",
 }
-DEFAULT_OUT = {"raw": ROOT / "dataset", "cleaned": ROOT / "dataset_cleaned"}
-
-
-def load_token():
-    """HF_TOKEN from the environment, else from the repo's .env file."""
-
-    if os.environ.get("HF_TOKEN"):
-        return os.environ["HF_TOKEN"]
-    env = ROOT / ".env"
-    if env.exists():
-        for line in env.read_text().splitlines():
-            line = line.strip().removeprefix("export ").strip()
-            if line.startswith("HF_TOKEN="):
-                return line.split("=", 1)[1].strip().strip("'\"")
-    return None
+DEFAULT_OUT = {"raw": layout.RAW, "cleaned": layout.PAGES}
 
 
 def parse_numbers(text):
@@ -113,12 +107,12 @@ def main():
     try:
         from huggingface_hub import HfApi, snapshot_download
     except ImportError:
-        raise SystemExit("needs huggingface_hub: pip install huggingface_hub "
-                         "(Major_Project_Eval_Local/.venv already has it)")
+        raise SystemExit("needs huggingface_hub: pip install -e . "
+                         "(or pip install huggingface_hub)")
 
     repo_id = REPOS.get(args.repo, args.repo)
     is_script_repo = repo_id in REPOS.values()
-    token = load_token()
+    token = layout.hf_token()
     if not token:
         print("no HF_TOKEN in the environment or .env - private repos "
               "will refuse", file=sys.stderr)
@@ -141,8 +135,8 @@ def main():
         print("  top level:", ", ".join(top))
         return
 
-    out = args.out or DEFAULT_OUT.get(args.repo) or ROOT / "data_hf" / (
-        repo_id.split("/")[-1])
+    out = args.out or DEFAULT_OUT.get(args.repo) or (
+        layout.DATA / "hf" / repo_id.split("/")[-1])
     allow, ignore = patterns(args, is_script_repo)
     print(f"{repo_id} -> {out}")
     if is_script_repo and not args.with_covers:

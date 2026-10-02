@@ -1,9 +1,9 @@
 """
 Package the whole corpus for reading on Colab, in resumable batches.
 
-    01_prepare/03_tone/output/  (prepared pages)
-        -> 02_read/upload/batch_NN.zip
-        -> 02_read/upload/MANIFEST.csv
+    data/pages/  (prepared pages)
+        -> data/read/batches/batch_NN.zip
+        -> data/read/batches/MANIFEST.csv
 
 WHY BATCHES AND NOT ONE ZIP
 ---------------------------
@@ -23,23 +23,25 @@ acceptable at all, so it is enforced here rather than left to the
 caller to remember.
 
 Run:
-    python prepare_corpus_batches.py                 # default 250/batch
-    python prepare_corpus_batches.py --per-batch 150
-    python prepare_corpus_batches.py --students 10   # a trial slice
+    python reading/read/prepare_corpus_batches.py                # 250/batch
+    python reading/read/prepare_corpus_batches.py --per-batch 150
+    python reading/read/prepare_corpus_batches.py --students 10  # a trial
 """
 
 import argparse
 import csv
 import re
+import sys
 import zipfile
 from pathlib import Path
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-MODULES = STAGE_DIR.parent
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-CLEAN = MODULES / "01_prepare" / "03_tone" / "output"
-OUT_DIR = STAGE_DIR / "upload"
+from common import layout                                  # noqa: E402
+
+CLEAN = layout.PAGES
+OUT_DIR = layout.BATCHES
 
 COVER_PAGE = 1
 
@@ -87,7 +89,9 @@ def main():
         raise SystemExit("no content pages found")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    for stale in OUT_DIR.glob("*.zip"):
+    # Only this script's own batches. batch_test.zip from
+    # prepare_test_batch.py lives in the same folder and is not stale.
+    for stale in OUT_DIR.glob("batch_[0-9][0-9].zip"):
         stale.unlink()
 
     rows = []

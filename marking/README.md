@@ -1,66 +1,64 @@
-# Marking handwritten exam booklets against the official schemes
+# Marking: booklets against the official schemes
 
-*(Local edition. Identical to `Major_Project_Eval` except that the model
-tier runs on this machine instead of on a free Colab T4 — see
-[`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md).)*
+The second half of the pipeline. It takes part 1's handoff (every
+booklet as `question → part → answer`, with its drawings) and marks it
+against the department's three CIE answer schemes. It then measures the
+result against the marks the faculty actually wrote on the covers.
 
-Part 2 of a two-part project. Part 1 read 50 handwritten Computer
-Networks booklets into structured `question → part → answer` data. This
-half marks them against the department's answer schemes, and measures
-the result against the marks the faculty actually awarded.
+It pays for no inference. Four tiers are plain Python. The model tier is
+a queue on disk that any of three readers can answer:
 
-**It pays for no inference, and now it makes no network call either.**
-Every tier runs on one machine: four of them in plain Python, and the
-model tier through a local Qwen2.5 served by Ollama or llama.cpp.
+| route | where the model runs | how |
+|---|---|---|
+| Colab | Qwen2.5-7B, 4-bit, on a free T4 | `src/make_llm_notebook.py` → `notebooks/grade_llm.ipynb` |
+| local | Qwen2.5-7B via Ollama or llama.cpp, on this machine | `src/llm_local.py`; read [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) first |
+| in session | Claude, reading the queue in a Claude Code session | `src/claude_tier.py` |
 
-That is a change of transport and nothing else. The prompt is
-byte-identical to the one the published numbers came from, the queue
-records are unchanged, and every check that made the model tier
-trustworthy — the quote re-check, the refused zeros — was always
-downstream of the model and is untouched.
+The prompt has one definition ([`src/llm_prompt.py`](src/llm_prompt.py))
+and every route uses it. Every check that makes the tier trustworthy
+(the verbatim-quote check, the refused zeros) runs downstream of the
+model, in `apply_verdicts.py`, whichever route produced the verdicts.
 
-**Read [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) before starting a
-run.** On a machine without an NVIDIA GPU the full 740-item queue is
-measured in tens of hours, and a model that does not fit in RAM does not
-refuse to load — it swaps, and looks merely slow.
+```bash
+python pipeline.py mark            # from the repo root: the whole run, in order
+python pipeline.py review          # the human tier, http://127.0.0.1:8000
+```
 
 ---
 
 ## The result
 
-On **289 questions across 49 booklets**, comparing our marks with the
-examiner's:
+Measured on part 1's September handoff: 50 booklets, one per student,
+read by the other part 1 implementation (archived with the old `main`).
+Each question is compared as the interval `[settled, settled + pending]`
+against the examiner's mark, because most items were still undecided
+when these were measured.
 
-| | |
-|---|---|
-| Examiner's mark still reachable | **229 (79%)** |
-| Over-settled — we awarded marks they did not | **21** |
-| Under-settled — we ruled out marks they gave | **39** |
-| Irreversible error rate | **20.8%** |
+| run | questions compared | examiner's mark reachable | over-settled | under-settled |
+|---|---|---|---|---|
+| Qwen2.5-7B on Colab (2026-09-20) | 289 | **229 (79%)** | 21 | 39 |
+| Claude in session, incl. a pass shown the drawings (2026-09-27) | 289 | **150 (52%)** | 31 | 108 |
 
-Of the 48 booklets carrying an examiner total, **39 have that total
-inside our range**. The nine that do not are all short, by one to four
-marks, and one of them (`student_45_cie_1`) is a booklet where the
-examiner did not apply the paper's own choice rule.
+The two are not a ranking. The Qwen run left far more items open, and
+every open item widens the interval, which makes "reachable" easier. The
+in-session run settled 946 of 1,221 items (383 by the deterministic
+ladder, 563 by the model tier). It left 275 for a person: mostly
+drawing-heavy answers, chain questions and parts with a lost page. Its
+95 awards that rest on a drawing could not be quote-checked, and the
+website labels them "not quote-checked" for spot checks. Every mark
+records which reader gave it.
 
-These numbers are **after** the model tier ran. Before it, 94% of
-questions were reachable — but only because almost nothing was settled,
-and an interval that spans everything agrees with anything. The honest
-comparison is this one.
+**The examiner is a reference, not ground truth.** Seven of the fifty
+covers carry a demonstrable defect: four Part C totals that ignore the
+paper's own choice instruction, one arithmetic slip, one grid with no
+totals, one with no marks at all. A grader that matched this reference
+perfectly would be reproducing its mistakes. Where we differ, the
+finding is "we differ, and here is why", and on the four choice-policy
+booklets we are right. See [`gold/gold_notes.md`](gold/gold_notes.md).
 
-Marks are compared as an **interval**, not a number: most rubric items
-are still queued to the model tier or a human, and collapsing that to a
-point would silently treat every undecided item as a zero.
-
-### The examiner is a reference, not a ground truth
-
-Seven of the fifty covers carry a demonstrable defect — four Part C
-totals that ignore the paper's own choice instruction, one arithmetic
-slip, one grid with no totals, one with no marks at all. **A grader that
-matched this reference perfectly would be reproducing its mistakes.**
-Where we differ, the finding is "we differ, and here is why", and on the
-four choice-policy booklets the answer is that we are right. See
-[`gold/gold_notes.md`](gold/gold_notes.md).
+One open question on the scheme itself: CIE 3 Q3a's key gives NRZ-I at
+10 Mbps as 500 kbaud / 500 kHz, but N/2 of 10 Mbps is 5 Mbaud / 5 MHz.
+Check it against the scheme PDF.
 
 ---
 
@@ -72,170 +70,160 @@ evidence.
 
 | tier | decides | runs on |
 |---|---|---|
-| `exact` | items naming concrete values — `57088`, `/26`, `14.24.74.126` | laptop |
+| `exact` | items naming concrete values (`57088`, `/26`, `14.24.74.126`) | laptop |
 | `keyword` | items where coverage is decisive either way | laptop |
 | `semantic` | MiniLM breaking ties on keyword-supported items | laptop (CPU) |
-| `llm` | everything still ambiguous | this machine — local Qwen2.5 on CPU |
+| `llm` | everything still ambiguous | any of the three routes above |
 | `human` | anything whose evidence is a drawing | a person, via `serve.py` |
-
-Current split of the 1,221 items on counted questions: **23% decided with
-no model and no human**, 246 settled by the model, and 599 still open —
-the great majority of those because the model's verdict was refused (see
-below) and the item now needs eyes on a drawing.
 
 ### Three rules that hold the thing together
 
 **1. A cheap tier may award on evidence it finds, but is restrained from
 concluding absence.** Finding the evidence is proof; failing to find it
-is not. Four carve-outs, each written against a measured failure:
+is not. There are four carve-outs, each written against a measured
+failure:
 
 - **chain questions** (subnetting, fragmentation, CRC, the delay
-  cascade) are never zeroed cheaply — a wrong block size at step one
-  makes every later value legitimately differ, and zeroing them charges
-  one slip five times
-- **a part containing a lost page** is incomplete, not wrong
-- **an answer whose evidence is a drawing** cannot be zeroed on prose —
-  on `student_01_cie_2`, question 2b's entire routing table sits in four
-  crops behind 73 characters of text; the examiner gave 5/5 and marking
-  the prose alone scored 0
+  cascade) are never zeroed cheaply. A wrong block size at step one
+  makes every later value legitimately differ, and zeroing those
+  charges one slip five times.
+- **a part containing a lost page** is incomplete, not wrong.
+- **an answer whose evidence is a drawing** cannot be zeroed on prose.
+  On `student_01_cie_2`, question 2b's entire routing table sits in four
+  crops behind 73 characters of text. The examiner gave 5/5, and marking
+  the prose alone scored 0.
 - **a long answer with no keyword overlap** is more likely our
-  vocabulary missing theirs than the student saying nothing
+  vocabulary missing theirs than the student saying nothing.
 
 **2. Similarity may confirm evidence. It may never supply it.** An item
-whose keywords are absent is not decided by the embedding tier no matter
-how topical it reads — every wrong subnet is about subnetting. The same
-rule applies to exact values: `student_23_cie_3` wrote 265 words about
-Fletcher checksums without one number from the scheme and briefly scored
-3/3 on topical similarity while the examiner gave zero.
+whose keywords are absent is not decided by the embedding tier however
+topical it reads: every wrong subnet is about subnetting. The same rule
+applies to exact values. `student_23_cie_3` wrote 265 words about
+Fletcher checksums without one number from the scheme, and briefly
+scored 3/3 on topical similarity while the examiner gave zero.
 
 **3. The model may not award a mark it cannot quote the student's own
-words to support, and may not zero what it cannot see.** `apply_verdicts.py` re-checks every quote against
-the answer and discards awards whose quote is not there. The check is
-downstream of the model and does not trust it — tested against
-fabricated quotes, mangled paraphrases and over-awards, all rejected.
-
-The first real run is what this rule is for. Qwen2.5-7B returned 169
-awards; **26 of them (15.4%) cited a quote that is not in the answer**
-and were discarded. That number is a property of the model, not of the
-corpus, and no prompt would have produced it honestly.
-
-The same run showed a prompt is worth as little in the other direction.
-The model is told, in as many words, that it is never shown the
-drawings, and that if the evidence would be in one it must decline. It
-obeyed on 55 of 438 drawing-backed items and **zeroed 295 of them**. It
-is told the scheme's carry-forward note on chain questions and told to
-mark against the student's own earlier values; on CIE-2 3b it zeroed all
-five organizations of two booklets against the scheme's absolute
-addresses, where the examiner gave 10/10 and 6/10.
-
-So the carve-outs above are enforced against the model too, in
-`zero_blocked`: **368 of its 471 zeros were refused** and sent to a
-human rather than settled. Its awards are untouched by this — finding
-evidence in the text is still proof, and still has to survive the quote
-check. Only its silence is disbelieved. Refusing those zeros moved
-under-settled questions from 167 to 38.
+words to support, and may not zero what it cannot see.**
+`apply_verdicts.py` re-checks every quote against the answer and discards
+any award whose quote is not there. On the first real run, 26 of
+Qwen2.5-7B's 169 awards (15.4%) cited a quote that is not in the answer.
+The same run zeroed 295 of 438 drawing-backed items it was told it could
+not see, so those zeros are refused into the human queue (`zero_blocked`)
+rather than settled. That moved under-settled questions from 167 to 38.
 
 ### Part C is a choice
 
-`max(3a, 3b)` and `max(4a, 4b)` — the better half, never the sum, as the
+`max(3a, 3b)` and `max(4a, 4b)`: the better half, never the sum, as the
 paper instructs.
 
 ---
 
 ## Running it
 
+Commands run from the repo root. `python pipeline.py mark` is
+`src/run_all.py`, which runs, in this order, stopping at the first
+failure:
+
 ```bash
-uv venv && uv pip install -e .            # laptop tiers only
-uv pip install -e ".[semantic]"           # add the embedding tier
-
-python src/render_scheme.py               # scheme PDFs -> PNG
-python src/validate_keys.py               # rubric arithmetic + structure
-python src/make_verify_sheet.py           # the human sign-off sheet
-
-python src/crop_covers.py                 # cover marks grids (identity excluded)
-python src/gold_check.py                  # the examiner's own arithmetic
-
-python src/load_handoff.py --report       # must match part 1's totals
-python src/align.py --report              # parts with no usable label
-
-python src/grade.py --all                 # the ladder
-python src/grade.py --all --no-semantic   # ...without torch
-python src/calibrate.py                   # sweep thresholds vs the examiner
-python src/agreement.py                   # the deliverable
-
-python src/setup_local.py --time-it       # can this machine do it, and how long
-python src/llm_local.py --check           # backend + model are really there
-python src/llm_local.py --limit 25        # a sample before committing hours
-python src/llm_local.py                   # the model tier, local and resumable
-python src/apply_verdicts.py output/local_verdicts.jsonl
-python src/llm_local.py --compare         # local vs the recorded Colab run
-python src/apply_human.py                 # replay the human tier's log
-
-python src/make_llm_notebook.py           # the Colab path, still available
-
-python src/serve.py --check               # the crops are really on disk
-python src/serve.py                       # the human tier, one booklet a page
+python marking/src/load_handoff.py --report   # must match the handoff's own totals
+python marking/src/align.py                   # resolve parts with no usable label
+python marking/src/grade.py --all             # the ladder
+python marking/src/apply_verdicts.py <file>   # the model tier's verdicts, if any
+python marking/src/apply_human.py             # the human log, if any
+python marking/src/agreement.py               # the deliverable
 ```
 
-Every stage carries its own check, and they are ordered so a failure
-surfaces before it contaminates the next one. There is no test suite;
-`--report`, `--check` and `--dry-run` are the verification.
+The model tier, whichever route you use:
 
-### The model tier needs one thing installed
+```bash
+python marking/src/llm_local.py --limit 25          # local: a sample first
+python marking/src/make_llm_notebook.py             # Colab: upload the queue to it
+python marking/src/claude_tier.py --next 12         # in session
+python pipeline.py mark --verdicts data/marking/local_verdicts.jsonl
+```
 
-Ollama, and one `ollama pull`. `setup_local.py` checks for both and
-prints the exact command if either is missing. Put the models outside
-OneDrive first — this project sits in a synced folder and the model file
-is gigabytes. [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) has the
-one-liner.
+The rubric and the examiner's marks have their own checks, which need no
+data at all:
+
+```bash
+python marking/src/render_scheme.py       # scheme PDFs -> PNG (needs data/schemes/)
+python marking/src/validate_keys.py       # rubric arithmetic and structure
+python marking/src/make_verify_sheet.py   # the human sign-off sheet, keys/VERIFY.md
+python marking/src/gold_check.py          # the examiner's own arithmetic
+python marking/src/calibrate.py           # sweep the thresholds against the examiner
+```
+
+Every stage carries its own check (`--report`, `--check`, `--dry-run`),
+and `python pipeline.py check` runs all the ones that need no model.
+[`docs/PIPELINE.md`](docs/PIPELINE.md) says what each step proves and
+what invalidates what.
 
 ### Where the data lives
 
-The 187 MB corpus is **referenced in place, not copied** — override with
-`MPE_HANDOFF` / `MPE_SCHEMES`. Nothing derived from a booklet is
-committable: all of `output/` is gitignored, because every file this
-project writes quotes a student to justify itself. The single exception
-is `gold/gold_marks.csv` — pseudonymous integers, no names or
-handwriting, and the one artifact that cannot be regenerated by running
-anything.
+| path | holds | in git? |
+|---|---|---|
+| `marking/keys/` | the rubric, hand-authored from the scheme scans | yes |
+| `marking/gold/gold_marks.csv` | the examiner's marks as pseudonymous integers | yes, the one exception |
+| `data/handoff/` | part 1's booklets, what is marked | no |
+| `data/marking/` | marks, queues, verdicts, the human log, every report | no |
+| `data/schemes/` | the department's three scheme PDFs, and their renders | no |
+
+To mark a handoff that lives elsewhere, such as the September
+`handoff1/`, set `MPE_HANDOFF` to it.
+
+---
+
+## Things that will bite you
+
+- **`grade.py --all` rewrites every marks file from scratch.** The model's
+  and the human's decisions are put back only by `apply_verdicts.py` and
+  `apply_human.py`. `python pipeline.py mark` always runs them in order;
+  running `grade.py` alone shows the cheap tiers and nothing else.
+- **Two verdicts files from different readers** make `run_all.py` refuse
+  to guess. Name the one to apply with `--verdicts`.
+- **Use one interpreter.** Without `sentence-transformers` the semantic
+  tier is skipped with a warning that scrolls past, and a handful of
+  items move.
+- **`data/marking/queue_human.jsonl` is written before any verdict** and
+  is stale the moment one is applied. `serve.py` ignores it and reads
+  the marks directly.
+- **The rubric is hand-authored** from phone scans, because the scheme
+  PDFs contain zero font objects and cannot be parsed. It is the ceiling
+  on every number downstream and has had one reader.
+  [`keys/VERIFY.md`](keys/VERIFY.md) is the sign-off sheet, and it is
+  still unsigned.
 
 ---
 
 ## What the numbers do not cover
 
-- **The rubric is hand-authored** from skewed phone scans, because the
-  scheme PDFs contain zero font objects and cannot be parsed. It is the
-  ceiling on everything downstream. `keys/VERIFY.md` is the sign-off.
 - **Our inferred mark splits are measurably worse than the scheme's
-  printed ones** — 89% vs 96% containment. Where the scheme gave a total
-  and no breakdown, the division into rubric items is our judgement, and
-  that seven-point gap is what it costs.
-- **All five under-settled questions are content we could not locate**,
-  not marks we misjudged. No threshold fixes that; they are queued to a
-  human.
+  printed ones**: 89% against 96% containment. Where the scheme gave a
+  total and no breakdown, the division into rubric items is our
+  judgement, and that seven-point gap is what it costs.
 - **The semantic tier barely earns its place.** Calibration over 1,600
-  settings drives it to almost zero at every low-error operating point —
-  it was the main source of over-awards, and constrained not to
+  settings drives it to almost zero at every low-error operating point.
+  It was the main source of over-awards, and constrained not to
   over-award it now fires on 6 items out of 1,221.
-- **67% of marks are still pending.** The model tier has run; most of
-  what it returned was refused rather than accepted, so the pending pile
-  barely moved. **226 questions holding 599 items** now wait on a human,
-  162 of them carrying a drawing. `serve.py` is the tool for that, and
-  until somebody works through it these numbers do not move.
-- **The nine unreachable booklets are the cost of settling anything.**
-  While nothing was settled our range spanned every possible mark and
-  contained the examiner by construction. It no longer does, and nine
-  totals now sit above our ceiling. That is the measurement starting to
-  say something rather than the measurement getting worse.
-- **The model tier is the weakest link, and it is measurable.** 15.4% of
-  its awards cited a quote that does not exist, and 63% of its zeros were
-  on answers it was structurally unable to read. Both numbers are in
-  `output/verdict_audit.md`, and both argue the same thing: this tier is
-  useful only with the checks around it.
-- **Every number on this page was produced by the Colab run, not by a
-  local one.** `output/grade_llm_verdicts.jsonl` is that run, kept here
-  intact. A local run writes `local_verdicts.jsonl` beside it and does
-  not change anything above until you apply it — and because the
-  quantisation and the runtime differ, it will not reproduce these
-  figures item for item. `python src/llm_local.py --compare` is how you
-  find out by how much, rather than assuming either direction.
+- **The thresholds in `src/tiers/__init__.py` are not the sweep's
+  pick.** The deviation is recorded there and in
+  [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1 rather than quietly changed,
+  because changing them re-marks every booklet.
+- **Every number above came from the September handoff.** The reading
+  half in this repo assembles its own; its first marked run is on the
+  list in [`../reading/docs/TODO.md`](../reading/docs/TODO.md).
+
+---
+
+## Read next
+
+| file | answers |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | how the marking works and why: the ladder, the asymmetry, the carve-outs |
+| [`docs/PIPELINE.md`](docs/PIPELINE.md) | run order, what each step proves, what invalidates what |
+| [`docs/DATA_FORMATS.md`](docs/DATA_FORMATS.md) | every file this half reads and writes |
+| [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | settled, pending, chain, gap, inside, zero_blocked |
+| [`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) | running the model tier on this machine: read before starting |
+| [`IMPROVEMENTS.md`](IMPROVEMENTS.md) | known weaknesses, with evidence |
+| [`keys/SCHEMA.md`](keys/SCHEMA.md) | the rubric format, and what may go in `exact` |
+| [`../docs/HANDOFF.md`](../docs/HANDOFF.md) | the contract this half reads |

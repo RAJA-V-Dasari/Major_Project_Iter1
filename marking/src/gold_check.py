@@ -56,8 +56,8 @@ reading is validated by the grand total instead, and the deviation is
 reported as an observation about the examiner.
 
 Run:
-    python src/gold_check.py
-    python src/gold_check.py --explain
+    python marking/src/gold_check.py
+    python marking/src/gold_check.py --explain
 """
 
 import argparse

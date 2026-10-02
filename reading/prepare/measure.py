@@ -25,13 +25,16 @@ dark residue in a *cleaned* page. Here the goal is the true physical
 boundary, so both trims use the same small TRIM_MARGIN.
 
 Run:
-    python measure.py                # full corpus
-    python measure.py --limit 100    # a sample
+    python reading/prepare/measure.py                # full corpus
+    python reading/prepare/measure.py --limit 100    # a sample
+
+    data/prepare/01_deskew/  ->  data/prepare/02_crop/measurements.json
 """
 
 import argparse
 import json
 import os
+import sys
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -39,12 +42,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
+from common import layout                                  # noqa: E402
 
-SOURCE_DIR = STAGE_DIR / "input"
-REPORT_PATH = STAGE_DIR / "output" / "measurements.json"
+SOURCE_DIR = layout.PREPARE / "01_deskew"
+REPORT_PATH = layout.PREPARE / "02_crop" / "measurements.json"
 
 # Same tuning as the old clean.py - see its comments for how these
 # were arrived at (measured against specific worst-case pages).

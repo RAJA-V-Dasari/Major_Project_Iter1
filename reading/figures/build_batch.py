@@ -1,8 +1,14 @@
 """
 Package pages for the diagram-finding pass.
 
-    python experiments/diagram_pass/build_batch.py            # every read page
-    python experiments/diagram_pass/build_batch.py --first 5  # students 1-5
+    python reading/figures/build_batch.py              # every read page
+    python reading/figures/build_batch.py --first 5    # students 1-5
+
+    data/pages/ + data/read/<engine>/  ->  data/figures/diagram_batch.zip
+
+Then run reading/figures/find_diagrams.ipynb on a Colab T4 and unzip its
+download into data/figures/, so diagrams.json lands where
+build_booklet.py looks for it.
 
 WHAT THIS IS FOR
 ----------------
@@ -19,14 +25,14 @@ output replaces the reading pass as the marker source.
 
 WHICH PAGES
 -----------
-Only pages that have a transcription under `modules/02_read/output/`,
+Only pages that have a transcription under `data/read/<engine>/`,
 because a drawing is placed by matching its anchor text against that
 transcription - a page with no text to match is a page this pass cannot
 help. With `all_read` that is 1,000 pages.
 
 THE BENCHMARK COMES FOR FREE
 ----------------------------
-The hand-labelled pages from `modules/03_assemble/labels.py` are inside
+The hand-labelled pages from `labels.py` beside this file are inside
 the batch, and their truth is written into `batch_truth.json` as
 fractions of page height, so the notebook scores itself without anything
 else being uploaded.
@@ -45,16 +51,21 @@ import zipfile
 
 import cv2
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))))
 HERE = os.path.dirname(os.path.abspath(__file__))
-UPLOAD = os.path.join(HERE, "upload")
-STAGE = os.path.join(HERE, "_staging")
+ROOT = HERE
+while not os.path.exists(os.path.join(ROOT, "common", "layout.py")):
+    ROOT = os.path.dirname(ROOT)
 
-TONE = os.path.join(ROOT, "modules", "01_prepare", "03_tone", "output")
-READ = os.path.join(ROOT, "modules", "02_read", "output")
+sys.path.insert(0, ROOT)
+sys.path.insert(0, HERE)                    # labels.py
 
-sys.path.insert(0, os.path.join(ROOT, "modules", "03_assemble"))
+from common import layout                   # noqa: E402
+
+UPLOAD = str(layout.FIGURES)
+STAGE = str(layout.FIGURES / "_staging")
+
+TONE = str(layout.PAGES)
+READ = str(layout.READ)
 
 # The model is shown a page this tall. Full 2177px buys nothing for
 # spotting an object the size of a diagram and costs visual tokens.
@@ -70,8 +81,9 @@ def page_id(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--engine", default="all_read",
-                    help="which read output to mirror (default all_read)")
+    ap.add_argument("--engine", default=layout.DEFAULT_ENGINE,
+                    help="which read output to mirror - the folder under "
+                         f"data/read/ (default {layout.DEFAULT_ENGINE})")
     ap.add_argument("--first", type=int,
                     help="limit to the first N students, for a trial run")
     args = ap.parse_args()

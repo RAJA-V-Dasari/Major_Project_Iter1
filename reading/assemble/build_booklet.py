@@ -1,10 +1,30 @@
 """
 Turn one booklet's page transcriptions into a single Markdown document.
 
-    02_read/output/<engine>/  (one .md per page)
-    01_prepare/03_tone/output/  (the page images)
-        -> 03_assemble/output/booklets/<booklet>/booklet.md
-        -> 03_assemble/output/booklets/<booklet>/figures/*.png
+    data/read/<engine>/         one transcription per page
+    data/pages/                 the page images
+    data/figures/diagrams.json  the diagram pass, used whenever present
+    data/figures/rejects.json   a person's figure review, likewise
+        -> data/booklets/<booklet>/booklet.md       for a person to read
+        -> data/booklets/<booklet>/structure.json   for the handoff stage
+        -> data/booklets/<booklet>/figures/*.png
+
+WHERE A PAGE'S TEXT IS FILED
+----------------------------
+A question heading opens a new question at the point it is written, not
+at the end of its page. Text above `### 2b)` on a page belongs to the
+question that was open before it - usually 2a, continued from the page
+before. Each run of lines between two headings is filed separately.
+
+An earlier version filed every page whole under the LAST heading on it,
+so a page carrying 1 and then 2a gave question 1's answer to 2a and left
+1 looking unattempted. Short questions share pages constantly, so that
+was the common case, not an edge.
+
+structure.json records the same decisions in reading order - which run
+of lines from which page went to which question, which pages were never
+read, which crop came from where - so the handoff stage packages exactly
+what this file decided rather than re-parsing the Markdown.
 
 WHY THE FIGURE POSITION COMES FROM TWO PLACES
 ---------------------------------------------
@@ -47,9 +67,10 @@ this stage can do, and deleting the second kind loses an answer, while
 keeping the first kind costs a marker one duplicated glance.
 
 Run:
-    python build_booklet.py --engine batch00_new --booklet student_01/cie_1
-    python build_booklet.py --engine batch00_new --all
-    python build_booklet.py --list
+    python reading/assemble/build_booklet.py --all
+    python reading/assemble/build_booklet.py --booklet student_01/cie_1
+    python reading/assemble/build_booklet.py --all --engine batch00_new
+    python reading/assemble/build_booklet.py --list
 """
 
 import argparse
@@ -57,6 +78,7 @@ import csv
 import difflib
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -64,18 +86,27 @@ import cv2
 import numpy as np
 
 SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-MODULES = STAGE_DIR.parent
-REPO = MODULES.parent
-
-PAGES = MODULES / "01_prepare" / "03_tone" / "output"
-READ = MODULES / "02_read" / "output"
-OUT_DIR = STAGE_DIR / "output" / "booklets"
-
-COVER_PAGE = 1
 
 sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(next(p for p in SRC_DIR.parents
+                            if (p / "common" / "layout.py").exists())))
+
 import segment                                       # noqa: E402
+from common import layout                            # noqa: E402
+
+PAGES = layout.PAGES
+OUT_DIR = layout.BOOKLETS
+
+DIAGRAMS = layout.FIGURES / "diagrams.json"
+REJECTS = layout.FIGURES / "rejects.json"
+
+COVER_PAGE = layout.COVER_PAGE
+
+# The two notes this file writes into a booklet for the person reading
+# it. They are scaffolding, not the student's words, so the handoff
+# stage drops them by these exact prefixes.
+FAILED_NOTE = "> **Reading failed partway down this page.**"
+NOT_LOCATED_NOTE = "> _figure not located: "
 
 # The question schema these booklets are set from, in the order the
 # answers should appear. 3a/3b and 4a/4b are alternatives - a student
@@ -429,7 +460,7 @@ def ink_columns(clean, y1, y2, margin=INK_MARGIN):
     A band taken from a fraction of page height runs the full width, so
     a crop made from one is a letterboxed strip with the drawing adrift
     in the middle of it. This is the fix, and it closes the open finding
-    in 04_evaluate/RESULTS.md that figure boxes are bands, not crops.
+    in reading/benchmark/RESULTS.md that figure boxes are bands, not crops.
 
     `clean` must be the RULE-FREE mask from figure_regions. Run it
     against the raw ink and every band comes back full-width, because
@@ -575,17 +606,24 @@ def load_rejects(path):
 
 
 def crop(image_path, box, target, pad=12):
+    """Cut `box` (padded, clamped) out of the page into `target`.
+
+    Returns the window actually cut, as [x1, y1, x2, y2] in page pixels,
+    or None when nothing could be cut.
+    """
     img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
     if img is None:
-        return False
+        return None
     h, w = img.shape
     x1, y1, x2, y2 = box
     x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
     x2, y2 = min(w, x2 + pad), min(h, y2 + pad)
     if x2 <= x1 or y2 <= y1:
-        return False
+        return None
     target.parent.mkdir(parents=True, exist_ok=True)
-    return bool(cv2.imwrite(str(target), img[y1:y2, x1:x2]))
+    if not cv2.imwrite(str(target), img[y1:y2, x1:x2]):
+        return None
+    return [int(x1), int(y1), int(x2), int(y2)]
 
 
 def build(engine, booklet, out_root=OUT_DIR, quiet=False,
@@ -593,7 +631,7 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
     """Assemble one booklet. Returns a stats dict."""
     student, cie = booklet.split("/")
     page_dir = PAGES / student / cie
-    read_dir = READ / engine
+    read_dir = layout.read_dir(engine)
     diagrams = diagrams or {}
     rejects = rejects or {}
 
@@ -627,11 +665,37 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
     stray = []
     emitted_figures = []
 
+    # The same decisions in reading order, for structure.json: every run
+    # of lines with the page it came from and the question it was filed
+    # under, and every page that was never read, with the question open
+    # when it was skipped.
+    stream = []
+    headings = {}           # label -> the heading text it was first read as
+    crops = {}              # figures/<file> -> which page, which window
+
+    # The lines since the last question heading on the page being read.
+    emitted = []
+
+    def flush(pid):
+        """File what was emitted under the question open right now."""
+        body = "\n".join(emitted).strip()
+        if body:
+            target = stray if current is None else answers[current]
+            target.extend([f"<!-- {pid} -->", body, ""])
+            stream.append({"page_id": pid, "label": current,
+                           "lines": list(emitted)})
+        emitted.clear()
+
     for image in images:
         pid = page_id_of(image)
         md = read_dir / f"{pid}.md"
         if not md.exists():
             stats["missing"] += 1
+            # Not read is not blank. The handoff carries this as a gap
+            # under the question that was open, so marking treats that
+            # answer as incomplete rather than short.
+            stream.append({"page_id": pid, "label": current,
+                           "gap": "page not read"})
             continue
         stats["pages"] += 1
 
@@ -695,15 +759,24 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
             replace_at, after, boxes = {}, {}, {}
             how, claimed = {}, set()
 
+        def save_crop(box, rel, kind, caption, pad=12):
+            """Cut one crop and record where it came from."""
+            window = crop(image, box, dest / rel, pad=pad)
+            if window is None:
+                return False
+            crops[rel] = {"page_id": pid, "kind": kind, "caption": caption,
+                          "bbox": window}
+            return True
+
         def emit_drawing(d, into):
             """Write one crop and append its Markdown reference."""
             n = stats["figures"] + 1
             rel = f"figures/{pid}_f{n:02d}.png"
-            if not crop(image, boxes[id(d)], dest / rel):
+            caption = (d.get("caption") or d.get("kind") or "figure").strip()
+            if not save_crop(boxes[id(d)], rel, "figure", caption):
                 return
             stats["figures"] = n
             stats["matched"] += 1
-            caption = (d.get("caption") or d.get("kind") or "figure").strip()
             into.append("")
             into.append(f"![{caption}]({rel})")
             into.append("")
@@ -717,7 +790,6 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
                 "box": "geometry" if boxes[id(d)] in claimed else "span",
             })
 
-        emitted = []
         for d in after.get(-1, []):
             emit_drawing(d, emitted)
         for i, line in enumerate(lines):
@@ -727,10 +799,15 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
             if head:
                 label, title = split_label(head.group(2), order)
                 if label:
+                    # The question changes HERE, not at the end of the
+                    # page: what was written above this heading belongs
+                    # to the question that was open before it.
+                    flush(pid)
                     current = label
                     if label not in answers:
                         answers[label] = []
                         order.append(label)
+                        headings[label] = head.group(2).strip()
                     if title:
                         emitted.append(f"**{title}**")
                     continue
@@ -751,10 +828,10 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
                 box = pairs[i]
                 n = stats["figures"] + 1
                 rel = f"figures/{pid}_f{n:02d}.png"
-                if crop(image, box, dest / rel):
+                kind, caption = MARKER.match(stripped).groups()
+                caption = caption.strip() or kind.lower()
+                if save_crop(box, rel, "figure", caption):
                     stats["figures"] = n
-                    kind, caption = MARKER.match(stripped).groups()
-                    caption = caption.strip() or kind.lower()
                     emitted.append(f"![{caption}]({rel})")
                 else:
                     emitted.append(stripped)
@@ -767,7 +844,7 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
                 # note puts scaffolding in front of the marker on a page
                 # where nothing is missing.
                 if not diagrams:
-                    emitted.append(f"> _figure not located: {stripped}_")
+                    emitted.append(f"{NOT_LOCATED_NOTE}{stripped}_")
                 continue
 
             emitted.append(line)
@@ -779,8 +856,8 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
         # flattened a diagram into labels and emitted no marker, so
         # these were shown rather than dropped.
         #
-        # Only without --diagrams. The geometry rule fires on 37% of
-        # pages and cannot tell a ruled margin from a ruled table, so
+        # Only without the diagram pass. The geometry rule fires on 37%
+        # of pages and cannot tell a ruled margin from a ruled table, so
         # once a model is saying what is and is not a drawing, appending
         # every unclaimed region is how false figures got into the
         # booklets - and appending them HERE, after the answer, is how
@@ -790,7 +867,7 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
                 continue
             n = stats["figures"] + 1
             rel = f"figures/{pid}_f{n:02d}.png"
-            if crop(image, box, dest / rel):
+            if save_crop(box, rel, "unreferenced", "unreferenced figure"):
                 stats["figures"] = n
                 stats["unreferenced"] += 1
                 emitted.append("")
@@ -803,24 +880,17 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
         # thin edges is sparse enough to fall under the size floor.
         if cut is not None:
             rel = f"figures/{pid}_page.png"
-            if crop(image, (0, 0, 10**6, 10**6), dest / rel, pad=0):
+            if save_crop((0, 0, 10**6, 10**6), rel, "page",
+                         f"{pid} full page", pad=0):
                 emitted.append("")
-                emitted.append(f"> **Reading failed partway down this "
-                               f"page.** Everything above is transcribed "
-                               f"from it; the rest was not readable. The "
-                               f"full page is below - mark from the "
-                               f"image, not from the text.")
+                emitted.append(f"{FAILED_NOTE} Everything above is "
+                               f"transcribed from it; the rest was not "
+                               f"readable. The full page is below - mark "
+                               f"from the image, not from the text.")
                 emitted.append("")
                 emitted.append(f"![{pid} full page]({rel})")
 
-        body = "\n".join(emitted).strip()
-        if not body:
-            continue
-
-        if current is None:
-            stray.extend([f"<!-- {pid} -->", body, ""])
-        else:
-            answers[current].extend([f"<!-- {pid} -->", body, ""])
+        flush(pid)
 
     # Schema order first, then anything else the reader claimed.
     ordered = [q for q in SCHEMA if q in answers]
@@ -842,6 +912,12 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
             answers["1"] = stray + answers.get("1", [])
             ordered.insert(0, "1")
             stats["recovered"] = 1
+            # Everything filed before the first label - text and any
+            # unread page among it - is the opening of question 1.
+            for item in stream:
+                if item["label"] is None:
+                    item["label"] = "1"
+                    item["recovered"] = True
         else:
             unplaced = stray
 
@@ -857,9 +933,34 @@ def build(engine, booklet, out_root=OUT_DIR, quiet=False,
     (dest / "booklet.md").write_text("\n".join(doc).rstrip() + "\n",
                                      encoding="utf-8")
 
+    figures_manifest = dest / "figures.json"
     if emitted_figures:
-        (dest / "figures.json").write_text(
+        figures_manifest.write_text(
             json.dumps(emitted_figures, indent=1), encoding="utf-8")
+    elif figures_manifest.exists():
+        figures_manifest.unlink()       # from an earlier run, now stale
+
+    student_n = int(re.search(r"(\d+)", student).group(1))
+    cie_n = int(re.search(r"(\d+)", cie).group(1))
+
+    structure = {
+        "booklet_id": layout.booklet_id(student_n, cie_n),
+        "student": student_n,
+        "cie": cie_n,
+        "engine": engine,
+        "figure_source": ("diagram pass" if diagrams
+                          else "reader markers and geometry"),
+        "pages": [{"page_id": page_id_of(p),
+                   "n": int(re.search(r"(\d+)", p.stem).group(1)),
+                   "read": (read_dir / f"{page_id_of(p)}.md").exists()}
+                  for p in images],
+        "headings": headings,
+        "recovered_question_1": bool(stats["recovered"]),
+        "stream": stream,
+        "crops": crops,
+    }
+    (dest / "structure.json").write_text(
+        json.dumps(structure, indent=1, ensure_ascii=False), encoding="utf-8")
 
     stats["questions"] = len(ordered)
     stats["found"] = ordered
@@ -885,14 +986,22 @@ def booklets():
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--engine", default="batch00_new")
-    ap.add_argument("--booklet")
-    ap.add_argument("--all", action="store_true")
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    ap.add_argument("--engine", default=layout.DEFAULT_ENGINE,
+                    help="which read to assemble - the folder under "
+                         f"data/read/ (default {layout.DEFAULT_ENGINE})")
+    ap.add_argument("--booklet", help="one booklet, e.g. student_01/cie_1")
+    ap.add_argument("--all", action="store_true",
+                    help="every booklet that has a transcription")
     ap.add_argument("--list", action="store_true")
-    ap.add_argument("--diagrams", help="diagrams.json from the diagram pass; "
-                                       "becomes the figure source")
-    ap.add_argument("--rejects", help="rejects.json from review_figures.py")
+    ap.add_argument("--diagrams",
+                    help="the diagram pass's diagrams.json (default: "
+                         "data/figures/diagrams.json, when it exists)")
+    ap.add_argument("--rejects",
+                    help="review_figures.py's rejects.json (default: "
+                         "data/figures/rejects.json, when it exists)")
+    ap.add_argument("--no-diagrams", action="store_true",
+                    help="ignore the diagram pass even if it has run")
     args = ap.parse_args()
 
     if args.list:
@@ -900,18 +1009,35 @@ def main():
             print(" ", b)
         return 0
 
-    diagrams = load_diagrams(args.diagrams) if args.diagrams else None
-    rejects = load_rejects(args.rejects) if args.rejects else None
+    layout.require(PAGES, "prepared pages",
+                   "Fetch them first: python pipeline.py fetch")
+    read_dir = layout.read_dir(args.engine)
+    layout.require(read_dir, f"transcriptions for {args.engine!r}",
+                   "Read the pages first - see: python pipeline.py read")
+
+    diagrams_path = rejects_path = None
+    if not args.no_diagrams:
+        diagrams_path = args.diagrams or (DIAGRAMS if DIAGRAMS.exists()
+                                          else None)
+    if diagrams_path:
+        rejects_path = args.rejects or (REJECTS if REJECTS.exists()
+                                        else None)
+
+    diagrams = load_diagrams(diagrams_path) if diagrams_path else None
+    rejects = load_rejects(rejects_path) if rejects_path else None
     if diagrams:
         n = sum(len(v) for v in diagrams.values())
         cut = sum(len(v) for v in (rejects or {}).values())
-        print(f"{n} drawings on {len(diagrams)} pages"
+        print(f"figure source: the diagram pass, {n} drawings on "
+              f"{len(diagrams)} pages"
               + (f", {cut} rejected in review" if cut else ""))
+    else:
+        print("figure source: the reader's markers and the geometry "
+              "(no diagram pass at data/figures/diagrams.json)")
 
     if args.all:
         rows = []
         for b in booklets():
-            read_dir = READ / args.engine
             student, cie = b.split("/")
             s = int(re.search(r"(\d+)", student).group(1))
             c = int(re.search(r"(\d+)", cie).group(1))
@@ -921,9 +1047,19 @@ def main():
                               rejects=rejects))
 
         if not rows:
-            raise SystemExit(f"no transcriptions under {READ / args.engine}")
+            raise SystemExit(f"no transcriptions under {read_dir}")
 
-        report = STAGE_DIR / "output" / "booklets.csv"
+        # A booklet folder this run did not build is from an earlier run
+        # - another engine, or pages since removed - and the handoff
+        # stage would otherwise package it beside this run's booklets.
+        built = {r["booklet"] for r in rows}
+        stale = [d for d in OUT_DIR.iterdir()
+                 if d.is_dir() and layout.BOOKLET_ID.match(d.name)
+                 and d.name not in built]
+        for folder in stale:
+            shutil.rmtree(folder)
+
+        report = OUT_DIR / "booklets.csv"
         with open(report, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(["booklet", "pages", "questions", "figures",
@@ -942,7 +1078,8 @@ def main():
               f"{total('figures')} figures "
               f"({total('matched')} placed, "
               f"{total('unreferenced')} unreferenced), "
-              f"{total('truncated')} pages cut at a loop")
+              f"{total('truncated')} pages cut at a loop, "
+              f"{total('missing')} pages not read")
         if diagrams:
             print(f"  placed by  anchor {total('by_anchor')}  "
                   f"marker {total('by_marker')}  "
@@ -952,6 +1089,9 @@ def main():
             lost = total('drawings') - total('matched')
             if lost:
                 print(f"  {lost} drawings could not be cropped")
+        if stale:
+            print(f"  removed {len(stale)} booklet folder(s) left by an "
+                  f"earlier run")
         print(f"  {report}")
         return 0
 

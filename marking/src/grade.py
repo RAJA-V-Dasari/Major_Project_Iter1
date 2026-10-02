@@ -1,10 +1,10 @@
 """
 Mark the booklets against the answer schemes.
 
-    keys/cie*.json + handoff  ->  output/marks/<booklet>.json
-                              ->  output/summary.csv
-                              ->  output/queue_llm.jsonl
-                              ->  output/queue_human.jsonl
+    keys/cie*.json + handoff  ->  data/marking/marks/<booklet>.json
+                              ->  data/marking/summary.csv
+                              ->  data/marking/queue_llm.jsonl
+                              ->  data/marking/queue_human.jsonl
 
 THE LADDER
 ----------
@@ -66,9 +66,9 @@ AWARD on evidence it finds, and is only ever restrained from concluding
 absence. Finding the evidence is proof; failing to find it is not.
 
 Run:
-    python src/grade.py --all
-    python src/grade.py --booklet student_01_cie_2 --verbose
-    python src/grade.py --all --no-semantic     # no torch needed
+    python marking/src/grade.py --all
+    python marking/src/grade.py --booklet student_01_cie_2 --verbose
+    python marking/src/grade.py --all --no-semantic     # no torch needed
 """
 
 import argparse
@@ -465,7 +465,7 @@ SUMMARY_FIELDS = ["booklet_id", "student", "cie", "counted", "marks_settled",
 
 
 def write_summary(reports=None):
-    """Rewrite output/summary.csv from the marks on disk.
+    """Rewrite data/marking/summary.csv from the marks on disk.
 
     This is importable, and the tiers that run after grade.py call it,
     because grade.py writes this file before either of them has decided
@@ -506,13 +506,16 @@ def summarise(reports, llm, human):
     pending = sum(r["marks_pending"] for r in reports)
 
     print(f"\n{len(reports)} booklets, {len(items)} rubric items counted")
+    if not items:
+        print("nothing to mark - is the handoff empty?")
+        return
     print(f"\ndecided without a human or a model: {decided}/{len(items)} "
           f"({decided / len(items):.0%})")
     for tier, count in sorted(by_tier.items(), key=lambda kv: -kv[1]):
         print(f"  {tier:12} {count:>5}  ({count / len(items):.0%})")
 
     print(f"\nmarks settled {settled:.0f}, pending {pending:.0f} "
-          f"({settled / (settled + pending):.0%} settled)")
+          f"({settled / ((settled + pending) or 1):.0%} settled)")
     print(f"queues: {len(llm)} for the model, {len(human)} for a human")
 
     missing = [q for r in reports for q in r["questions"]
@@ -551,7 +554,8 @@ def main():
         else:
             print("sentence-transformers not installed - the semantic tier "
                   "is skipped and its items go to the model queue.\n"
-                  "  install with: uv pip install -e .[semantic]")
+                  "  install with: pip install -e \".[semantic]\" "
+                  "(from the repo root)")
 
     reports = []
     for booklet in booklets:

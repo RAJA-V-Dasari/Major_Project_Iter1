@@ -1,9 +1,9 @@
 """
 Cut the faculty marks grid out of each booklet's cover page.
 
-    handoff/data/<booklet>/pages/page_01.png
-        -> gold/covers/<booklet>.png          the marks table, and only that
-        -> gold/covers/_contact_sheet_NN.png  50 crops on a few sheets
+    data/handoff/<booklet>/pages/page_01.png
+        -> data/marking/covers/<booklet>.png   the marks table, and only that
+        -> data/marking/covers/_contact_sheet_NN.png  crops on a few sheets
 
 WHY CROP AT ALL
 ---------------
@@ -37,9 +37,9 @@ still wrong. So every crop is tiled onto a contact sheet and looked at
 before a single one is read.
 
 Run:
-    python src/crop_covers.py
-    python src/crop_covers.py --top 0.46 --bottom 0.98   # if the sheet says so
-    python src/crop_covers.py --booklet student_19_cie_2
+    python marking/src/crop_covers.py
+    python marking/src/crop_covers.py --top 0.46 --bottom 0.98   # if the sheet says so
+    python marking/src/crop_covers.py --booklet student_19_cie_2
 """
 
 import argparse

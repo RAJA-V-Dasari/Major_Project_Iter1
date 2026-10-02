@@ -1,8 +1,17 @@
 # What can be improved
 
-A review of `Major_Project_Eval` as it stands on 2026-09-21, plus
+A review of the marking half (then its own folder, `Major_Project_Eval`)
+as it stood on 2026-09-21, plus
 [§4](#severity-4--found-while-porting-the-model-tier-local), added
-2026-09-23 when the model tier was moved onto this machine.
+2026-09-23 when the model tier was moved onto this machine. File paths
+below are as they were then; the code now lives in `marking/src/` and
+its output in `data/marking/`.
+
+Fixed since, in the restructure into one pipeline (2026-10-02):
+`align.py` crashed (`IndexError`) on an unlabelled part that was not a
+short heading; `agreement.py`, `grade.py` and `load_handoff.py --report`
+divided by zero on a handoff with no examiner marks or no parts; and
+`run_all.py` reported a fixed "740 items" for whatever queue it found.
 
 **Status: severity 1 and severity 2 have been acted on.** The findings
 below are left as written, because the evidence is the useful part and a
@@ -58,7 +67,7 @@ drifted apart. That is a good problem to have.
 
 ### 1.1 The committed thresholds are not the calibrated ones
 
-**Evidence.** `output/calibration.md` ends with:
+**Evidence.** `data/marking/calibration.md` ends with:
 
 ```python
 kw_confident   = 0.6      kw_absent      = 0.34
@@ -75,10 +84,10 @@ sem_confident=0.62, zero_max_chars=150
 
 Three of the five differ. The `Thresholds` docstring says *"The defaults
 below were CHOSEN by that sweep, over 1,600 settings against 289
-examiner-marked questions. See output/calibration.md. At this point: 11
+examiner-marked questions. See data/marking/calibration.md. At this point: 11
 over-settled, 5 under-settled, 22% of marks decided"* — but the report
 it points at records **33 over-settled, 6 under-settled, 41% decisive**
-at its own chosen point, and `output/agreement.md` records 21 and 38 for
+at its own chosen point, and `data/marking/agreement.md` records 21 and 38 for
 the run that actually shipped. No two of those three agree.
 
 **Why it matters.** The calibration is the project's justification for
@@ -102,7 +111,7 @@ the first change"* — applies one level up, to the report and the code.
 
 ### 1.2 `grade.py --all` silently destroys every model and human decision
 
-**Evidence.** `grade.py` writes `output/marks/<booklet>.json`
+**Evidence.** `grade.py` writes `data/marking/marks/<booklet>.json`
 unconditionally (line ~442). `apply_verdicts.py` and `serve.py` both
 update those same files in place. Nothing reads `human_marks.jsonl`
 back — `grep -rl human_marks src/` returns only `serve.py`, which
@@ -128,7 +137,7 @@ is one keystroke away.
 2. Failing that, have `grade.py` refuse to overwrite a marks file
    carrying human- or llm-decided items unless `--force` is passed.
 
-### 1.3 `output/` holds three different vintages that contradict each other
+### 1.3 `data/marking/` holds three different vintages that contradict each other
 
 **Evidence.** By file timestamp: `summary.csv` is from the 09-19 14:11
 grade run, `agreement.md` from 09-20 22:29, and `marks/*.json` from
@@ -141,7 +150,7 @@ correct when written.
 **Why it matters.** The root README's headline numbers come from
 `agreement.md`, which predates the human tier's only session. The
 reported figures are therefore slightly conservative, and — more
-importantly — a reader comparing two files in `output/` will conclude
+importantly — a reader comparing two files in `data/marking/` will conclude
 something is broken.
 
 **Fix.** Write a provenance stamp into every generated report: the

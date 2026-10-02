@@ -1,15 +1,16 @@
 """
 Build a contact sheet of every cropped figure, for one human pass.
 
-    python modules/03_assemble/src/review_figures.py
-    start modules/03_assemble/output/review.html
+    python reading/assemble/review_figures.py
+    start data/figures/review.html
 
 Then click any crop that is not a drawing, save `rejects.json` where the
-page tells you, and rebuild:
+page tells you (data/figures/rejects.json), and rebuild:
 
-    python modules/03_assemble/src/build_booklet.py --engine all_read \\
-        --diagrams experiments/diagram_pass/output/diagrams.json \\
-        --rejects modules/03_assemble/output/rejects.json --all
+    python pipeline.py assemble
+
+build_booklet.py picks data/figures/diagrams.json and rejects.json up on
+its own, so the rebuild needs no flags.
 
 WHY THIS EXISTS
 ---------------
@@ -28,9 +29,9 @@ shows exactly the images that are in the Markdown.
 PRIVACY
 -------
 The crops are pieces of real student pages, so `review.html` is a page
-image wearing a text file's extension. It lands under
-`modules/03_assemble/output/`, which is gitignored by `modules/*/output`.
-Do not move it somewhere that is not.
+image wearing a text file's extension. It lands under `data/figures/`,
+which is gitignored with the rest of `data/`. Do not move it somewhere
+that is not.
 """
 
 import argparse
@@ -38,14 +39,18 @@ import base64
 import html
 import json
 import os
+import sys
 from pathlib import Path
 
 import cv2
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-OUT_DIR = STAGE_DIR / "output"
-BOOKLETS = OUT_DIR / "booklets"
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
+
+from common import layout                                  # noqa: E402
+
+OUT_DIR = layout.FIGURES
+BOOKLETS = layout.BOOKLETS
 
 # Crops are shown at this width. Wide enough to judge whether something
 # is a drawing, small enough that three hundred of them fit in one file.
@@ -190,7 +195,10 @@ def main():
                 f'</figure>')
 
     out_path = Path(args.out)
-    rel = os.path.relpath(out_path.parent / "rejects.json", Path.cwd())
+    try:
+        rel = os.path.relpath(out_path.parent / "rejects.json", Path.cwd())
+    except ValueError:                  # a data root on another drive
+        rel = str(out_path.parent / "rejects.json")
 
     page = f"""<!doctype html>
 <meta charset="utf-8">

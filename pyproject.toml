@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "major-project"
+version = "1.0.0"
+description = "Handwritten CIE answer booklets: read with a vision model, marked against the department's schemes, measured against the examiner."
+readme = "README.md"
+requires-python = ">=3.11"
+
+# The base install is everything that runs on a laptop with no GPU and no
+# ML stack: preparing pages, assembling booklets, the handoff, and the
+# deterministic marking tiers. Reading a page is the one step that needs a
+# GPU, and it runs elsewhere (Colab, Kaggle, a server) - nothing here
+# installs a model.
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python-headless>=4.8",  # prepare, segment, figure crops
+    "pillow>=10.0",                 # page reads, covers, contact sheets
+    "pymupdf>=1.24",                # render the scanned answer schemes
+    "huggingface_hub>=0.24",        # fetch and publish the corpus
+]
+
+[project.optional-dependencies]
+# Marking tier 2, MiniLM on CPU. ~2 GB with torch, decides a handful of
+# rubric items; every script degrades rather than breaks without it.
+semantic = ["sentence-transformers>=3.0"]
+# A GGUF model in-process: read_pages.py --reader local, and the marking
+# model tier's --backend llama-cpp. Builds from source on Windows unless a
+# matching wheel exists.
+llama-cpp = ["llama-cpp-python>=0.2.80"]
+# Driving a free Kaggle GPU from this machine (reading/read/kaggle_run.py).
+kaggle = ["kaggle>=1.6"]
+# Serving the reader from Modal (reading/read/modal_vllm.py).
+modal = ["modal>=1.0"]
+
+[tool.setuptools]
+packages = []

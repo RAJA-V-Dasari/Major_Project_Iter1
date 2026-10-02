@@ -1,7 +1,8 @@
 """
 Generate the Colab notebook for the diagram-finding pass.
 
-    python experiments/diagram_pass/make_notebook.py
+    python reading/figures/make_notebook.py
+        -> reading/figures/find_diagrams.ipynb
 
 This pass replaces the reading pass as the source of figure markers. The
 reading pass emits `![diagram: ...]` on 52 of 1,000 pages - finding
@@ -573,11 +574,14 @@ plt.tight_layout(); plt.show()
 md("""
 ## 9. Package
 
-Downloads `diagram_result.zip`. Put it in
-`experiments/diagram_pass/output/`, then locally:
+Downloads `diagram_result.zip`. Unzip it into `data/figures/` in the
+repo, so `diagrams.json` lands at `data/figures/diagrams.json`, then
+locally:
 
-    python modules/03_assemble/src/build_booklet.py \\
-        --engine all_read --diagrams experiments/diagram_pass/output/diagrams.json --all
+    python pipeline.py assemble --engine all_read
+
+`build_booklet.py` picks `data/figures/diagrams.json` up on its own and
+uses it as the figure source.
 """)
 
 code("""

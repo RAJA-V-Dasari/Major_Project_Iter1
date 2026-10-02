@@ -17,7 +17,7 @@ class Thresholds:
     THESE ARE NOT THE SWEEP'S PICK - AN OPEN DEVIATION
     --------------------------------------------------
     `calibrate.py` sweeps ~1,600 settings and marks its recommendation in
-    output/calibration.md. It currently recommends kw_confident 0.85 and
+    data/marking/calibration.md. It currently recommends kw_confident 0.85 and
     kw_corroborate 1.00, and these values are looser than that. Measured
     on the same basis, over the ladder alone:
 
@@ -44,8 +44,8 @@ class Thresholds:
     a comparison the reports do not print. Everything else lives in the
     report that generates it:
 
-        output/calibration.md   what the sweep recommends
-        output/agreement.md     what the shipped settings actually do
+        data/marking/calibration.md   what the sweep recommends
+        data/marking/agreement.md     what the shipped settings actually do
 
     An earlier version of this docstring said the sweep had CHOSEN these
     values. It had not, and the claim survived because nothing re-checked

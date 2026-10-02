@@ -13,10 +13,13 @@ Then pages from every failure class, plus a random sample of pages both
 methods called clean, were compared against the scan by eye.
 
 ```bash
-python modules/02_read/src/check_batch.py modules/02_read/output/batch00
-python modules/02_read/src/audit_pages.py modules/02_read/output/batch00
-python modules/02_read/src/render_boxes.py modules/02_read/output/batch00 --out DIR
+python reading/read/qa/check_batch.py data/read/batch00
+python reading/read/qa/audit_pages.py data/read/batch00
 ```
+
+(A third tool, `render_boxes.py`, drew the reader's coordinate boxes back
+onto the pages. The prompt stopped asking for coordinates after this
+review, so it was removed; it is in git history before the restructure.)
 
 ## Headline
 

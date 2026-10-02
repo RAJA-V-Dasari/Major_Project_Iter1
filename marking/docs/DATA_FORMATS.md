@@ -6,7 +6,7 @@ those are documented authoritatively in
 
 Field names below are real; all example *values* are invented or
 redacted. **No student's writing appears in this file**, which is the
-same rule that keeps all of `output/` out of git.
+same rule that keeps all of `data/marking/` out of git.
 
 ---
 
@@ -76,7 +76,7 @@ covers carry a demonstrable defect.
 
 ## Intermediate
 
-### `output/alignment.json`
+### `data/marking/alignment.json`
 
 Written by `align.py`. Two sections: `headers` (the 35 parts classified
 as structural section headings and dropped) and `proposals`.
@@ -105,7 +105,7 @@ wrong question number attaches a student's work to the wrong rubric,
 which is exactly the failure part 1 refused to risk when it left these
 unlabelled.
 
-### `output/queue_llm.jsonl` and `output/queue_human.jsonl`
+### `data/marking/queue_llm.jsonl` and `data/marking/queue_human.jsonl`
 
 One JSON object per line, one line per undecided rubric item.
 
@@ -148,8 +148,8 @@ Two files share this shape, and the distinction matters:
 
 | file | written by | note |
 |---|---|---|
-| `output/grade_llm_verdicts.jsonl` | the recorded Colab run | the source of every published number; **preserved, never appended to** |
-| `output/local_verdicts.jsonl` | `llm_local.py` | a local run; compare with `llm_local.py --compare` |
+| `data/marking/grade_llm_verdicts.jsonl` | the recorded Colab run | the source of every published number; **preserved, never appended to** |
+| `data/marking/local_verdicts.jsonl` | `llm_local.py` | a local run; compare with `llm_local.py --compare` |
 
 `llm_local.py` refuses to append verdicts from one model to a file
 written by another unless told `--allow-mixed-models`, because a
@@ -195,7 +195,7 @@ share to be the most sensitive number, and the most telling: quoting
 verbatim from a long passage is the first thing a smaller model stops
 doing well, and it is exactly what `apply_verdicts.py` checks.
 
-### `output/human_marks.jsonl`
+### `data/marking/human_marks.jsonl`
 
 Append-only, written by `serve.py` **before** the marks file is
 rewritten. The log is the record; `marks/*.json` is derived state.
@@ -213,7 +213,7 @@ it is the only durable record of human work. Treat it accordingly.
 
 ## Output
 
-### `output/marks/<booklet>.json` — the authoritative result
+### `data/marking/marks/<booklet>.json` — the authoritative result
 
 ```jsonc
 {
@@ -274,7 +274,7 @@ decided against the student".
 `unattempted`. The last means no content was filed under the question at
 all, and is a real decided zero rather than a pending one.
 
-### `output/summary.csv`
+### `data/marking/summary.csv`
 
 ```
 booklet_id,student,cie,counted,marks_settled,marks_pending,max_marks
@@ -289,13 +289,13 @@ Treat it as a `grade.py` artifact, not a status report — see
 
 | file | written by | holds |
 |---|---|---|
-| `output/agreement.md` | `agreement.py` | the deliverable: intervals against the examiner, per part, per split, per tier, plus every irreversible difference itemised |
-| `output/calibration.md` | `calibrate.py` | the threshold frontier and the chosen operating point |
-| `output/verdict_audit.md` | `apply_verdicts.py` | every rejected award and every refused zero, with the reason |
-| `output/alignment.md` | `align.py` | the human-readable half of `alignment.json` |
+| `data/marking/agreement.md` | `agreement.py` | the deliverable: intervals against the examiner, per part, per split, per tier, plus every irreversible difference itemised |
+| `data/marking/calibration.md` | `calibrate.py` | the threshold frontier and the chosen operating point |
+| `data/marking/verdict_audit.md` | `apply_verdicts.py` | every rejected award and every refused zero, with the reason |
+| `data/marking/alignment.md` | `align.py` | the human-readable half of `alignment.json` |
 | `keys/VERIFY.md` | `make_verify_sheet.py` | the rubric sign-off sheet, generated so it cannot drift from the keys |
 
-All of `output/` is gitignored — not by an allowlist, deliberately.
+All of `data/marking/` is gitignored — not by an allowlist, deliberately.
 Every file this project writes quotes a student to justify itself: the
 alignment proposals carry answer excerpts, the marks carry the evidence
 quote a tier awarded on, the queues carry both. An allowlist would be

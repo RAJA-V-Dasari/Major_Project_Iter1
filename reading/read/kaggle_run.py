@@ -1,13 +1,12 @@
 """
 The corpus pass, driven from this laptop, on somebody else's free GPU.
 
-    python modules/02_read/src/kaggle_run.py --user <kaggle-name> --all
+    python reading/read/kaggle_run.py --user <kaggle-name> --all
 
 Uploads the pages as a PRIVATE Kaggle dataset, builds a kernel from the
 same cells `make_colab_notebook.py` already generates, pushes it, polls
-until it finishes and drops the markdown into
-`modules/04_evaluate/predictions/<ENGINE>/`. Then the rest of the
-pipeline runs against it with `--reader cached`, as it always has.
+until it finishes and drops the markdown into `data/read/<ENGINE>/`.
+Then the rest of the pipeline runs against it with no GPU at all.
 
 No browser, no Drive, no session to babysit. Kaggle gives 30 GPU hours a
 week on a P100 (16GB) or 2xT4 (32GB total) and asks for no card, ever.
@@ -29,7 +28,7 @@ WHY IT SPLICES RATHER THAN RESTATES
 The prompt and the read logic are imported from `make_colab_notebook`,
 never copied. That module is the single home of the prompt, and a second
 copy that drifts would silently invalidate every CER in DONE.md - the
-same failure the `run_booklet.py` import already guards against.
+same failure the `read_pages.py` import already guards against.
 
 The splice point is a contract, not a line number: the Colab cells stage
 pages and define `IN`, `OUT_ROOT` and `imgs`; every cell from the model
@@ -65,12 +64,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(next(p for p in HERE.parents
+                            if (p / "common" / "layout.py").exists())))
 
 import make_colab_notebook as N            # noqa: E402  - the one prompt
+from common import layout                  # noqa: E402
 
-ROOT = HERE.parent.parent.parent
-PAGES = ROOT / "modules" / "01_prepare" / "03_tone" / "output"
-WORK = HERE.parent / "kaggle"
+PAGES = layout.PAGES
+# Staging holds a full copy of the corpus on its way to Kaggle, so it
+# lives under the data root with everything else that is student work.
+WORK = layout.READ / "kaggle"
 DATASET_DIR = WORK / "dataset"
 KERNEL_DIR = WORK / "kernel"
 
@@ -301,7 +304,7 @@ def poll(user, slug, every=60):
 def fetch(user, slug, engine):
     """Pull the markdown into the cache every other stage reads."""
 
-    destination = ROOT / "modules" / "04_evaluate" / "predictions" / engine
+    destination = layout.read_dir(engine)
     destination.mkdir(parents=True, exist_ok=True)
 
     run(["kaggle", "kernels", "output", "%s/%s" % (user, slug),
@@ -327,7 +330,8 @@ def main():
     parser.add_argument("--user", required=True, help="Kaggle username")
     parser.add_argument("--dataset-slug", default="answer-script-pages")
     parser.add_argument("--kernel-slug", default="answer-script-reading")
-    parser.add_argument("--engine", default="qwen7b")
+    parser.add_argument("--engine", default=layout.DEFAULT_ENGINE,
+                        help="folder under data/read/ to fetch into")
     parser.add_argument("--batch", help="substring filter, e.g. cie_2")
     parser.add_argument("--resume", metavar="USER/KERNEL",
                         help="mount a previous run's output and continue")
@@ -374,8 +378,7 @@ def main():
         fetch(args.user, args.kernel_slug, args.engine)
 
     print("\ndone. Now, with no GPU:")
-    print("  python modules/05_pipeline/src/run_booklet.py --all "
-          "--reader cached --engine %s" % args.engine)
+    print("  python pipeline.py run --engine %s" % args.engine)
 
     return 0
 

@@ -15,24 +15,36 @@ of technique as grid.py and the old clean.py, applied in both
 orientations to isolate the table's printed box borders from
 handwriting and background.
 
+A tool, not a pipeline stage: nothing downstream reads the template
+yet. It is the groundwork for reading the cover's identity block and
+marks grid, which no stage does today.
+
 Run:
-    python cover_template.py           # build + save the template
-    python cover_template.py --preview # draw the template over one page
+    python reading/prepare/tools/cover_template.py            # build + save
+    python reading/prepare/tools/cover_template.py --preview  # overlay one page
+
+Reads cover pages from data/prepare/02_crop/, so it needs the raw scans
+fetched with covers (`fetch_hf.py --repo raw --with-covers`) and the
+first two prepare stages run.
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-OUT_DIR = STAGE_DIR / "output"
+from common import layout                                  # noqa: E402
 
-TEMPLATE_PATH = STAGE_DIR / "cover_template.json"
+OUT_DIR = layout.PREPARE / "02_crop"
+PREVIEW_DIR = layout.PREPARE / "preview" / "cover_template"
+
+TEMPLATE_PATH = Path(__file__).resolve().parent / "cover_template.json"
 
 HORIZ_KERNEL = 40
 VERT_KERNEL = 40
@@ -266,7 +278,7 @@ def preview(template, rel="student_01/cie_1/page_01.png"):
         y1 = int(line["end"] + origin_y)
         cv2.line(color, (x, y0), (x, y1), (255, 0, 0), 3)
 
-    out_path = STAGE_DIR / "preview" / "cover_template.png"
+    out_path = PREVIEW_DIR / "cover_template.png"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out_path), color)
     print(f"Template overlay (aligned to {rel}): {out_path}")

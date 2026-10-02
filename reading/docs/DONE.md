@@ -3,7 +3,12 @@
 Every number here was measured on this corpus, on this machine. Where a
 claim rests on 15 pages rather than 1,231, it says so.
 
-*As of 2026-08-23.*
+*As of 2026-08-23.* Written when this half lived under `modules/`. The
+stage names below map onto today's folders: `01_prepare` is
+`reading/prepare`, `02_read` is `reading/read`, `03_assemble` is
+`reading/assemble`, `04_evaluate` is `reading/benchmark`, and
+`05_pipeline` became `reading/read/read_pages.py` plus the root
+`pipeline.py`.
 
 ---
 
@@ -21,20 +26,20 @@ Scored on 15 hand-transcribed pages, same scorer, same pages:
 | **`qwen7b`** - whole page, zero-shot | **0.099** | **0.281** |
 
 4.7x better than the line pipeline this repo was originally built
-around. Detail in [`modules/04_evaluate/RESULTS.md`](modules/04_evaluate/RESULTS.md).
+around. Detail in [`reading/benchmark/RESULTS.md`](../benchmark/RESULTS.md).
 
 ---
 
 ## 2. What works, stage by stage
 
-### 01_prepare - deskew, crop, tone
+### 01_prepare (`reading/prepare`) - deskew, crop, tone
 Unchanged and working. Rotation from the printed rule angle via Hough;
 every page cropped to one size anchored on the detected paper edge;
 illumination flattened by dividing by a local background estimate,
 which removes bleed-through by exploiting sharpness rather than
 brightness. Kept greyscale, never binarised.
 
-### 02_read - page to Markdown
+### 02_read (`reading/read`) - page to Markdown
 Qwen2.5-VL-7B in 4-bit on a free Colab T4, zero-shot. Emits question
 numbers as headings, maths as inline LaTeX, struck-out text as `~~ ~~`,
 and figures as `![diagram](x1,y1,x2,y2)` in original page pixels.
@@ -42,18 +47,18 @@ and figures as `![diagram](x1,y1,x2,y2)` in original page pixels.
 All 1,231 pages are packaged as five ~65MB batches ready to run, and
 the notebook resumes after a dropped session.
 
-### 03_assemble - group by question
+### 03_assemble (`reading/assemble`) - group by question
 Parses the headings the reader produced and groups pages into one
 answer per question per booklet. Handles answers that span a page
 break, and flags a page that opens mid-answer rather than guessing.
 
-### 04_evaluate - the measurement
+### 04_evaluate (`reading/benchmark`) - the measurement
 CER/WER against hand transcription, with markdown scaffolding
 normalised away so an engine is scored on reading rather than
 formatting. 15 pages transcribed, stratified across neat, medium and
 messy handwriting, covering all three CIEs.
 
-### 05_pipeline - one command
+### 05_pipeline (`pipeline.py`) - one command
 `run_booklet.py <booklet>` runs the whole thing. Reading sits behind a
 swappable reader so the pipeline does not change when the GPU does, and
 `run.json` records which model produced every output.

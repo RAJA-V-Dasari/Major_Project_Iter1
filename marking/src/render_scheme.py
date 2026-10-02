@@ -1,7 +1,7 @@
 """
 Render the three answer schemes to PNG, one file per page.
 
-    answer_keys/CIE {1,2,3} *.pdf  ->  keys/scheme_pages/cie<N>_p<NN>.png
+    data/schemes/CIE {1,2,3} *.pdf  ->  data/schemes/pages/cie<N>_p<NN>.png
 
 WHY THIS EXISTS AT ALL
 ----------------------
@@ -24,9 +24,9 @@ straightening it here would mean the thing a human verifies against no
 longer matches the document of record.
 
 Run:
-    python src/render_scheme.py
-    python src/render_scheme.py --dpi 300 --cie 2
-    python src/render_scheme.py --check
+    python marking/src/render_scheme.py
+    python marking/src/render_scheme.py --dpi 300 --cie 2
+    python marking/src/render_scheme.py --check
 """
 
 import argparse

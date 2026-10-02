@@ -1,7 +1,7 @@
 """
 Fix page rotation using the printed rule lines.
 
-    deskew/input/  (raw, as converted from HF)  ->  deskew/output/
+    data/raw/  (the scans, as fetched from HF)  ->  data/prepare/01_deskew/
 
 The rules are the one landmark on every page, and they are dead
 straight, so their angle IS the page angle. Detected with a
@@ -19,32 +19,34 @@ Hough finds 67-138 segments on every page tested and returns a
 continuous angle.
 
 Carried over as-is from the previous clean.py: only the deskew step.
-Trim, tone and canonicalise are separate stages to be rebuilt next.
+Crop and tone are the next two stages (crop.py, tone.py).
 
 Run:
-    python deskew.py --preview        # before/after pairs, no writes
-    python deskew.py                  # deskew everything
-    python deskew.py --limit 20       # a sample
+    python reading/prepare/deskew.py --preview    # before/after pairs, no writes
+    python reading/prepare/deskew.py              # deskew everything
+    python reading/prepare/deskew.py --limit 20   # a sample
 """
 
 import argparse
 import json
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
+from common import layout                                  # noqa: E402
 
-SOURCE_DIR = STAGE_DIR / "input"
-OUT_DIR = STAGE_DIR / "output"
+SOURCE_DIR = layout.RAW
+OUT_DIR = layout.PREPARE / "01_deskew"
 
 TRANSFORMS_PATH = OUT_DIR / "angles.json"
-PREVIEW_DIR = STAGE_DIR / "preview"
+PREVIEW_DIR = layout.PREPARE / "preview" / "01_deskew"
 
 # Reference grid drawn only in --preview, so skew is visible against a
 # known-horizontal line rather than by eye alone.

@@ -15,7 +15,7 @@ file still claims they are.
 
 So `llm_local.py` and `make_llm_notebook.py` both import from here. The
 prompt is verbatim the one the recorded Colab run used, character for
-character, which is what makes `output/grade_llm_verdicts.jsonl` and a
+character, which is what makes `data/marking/grade_llm_verdicts.jsonl` and a
 fresh local run comparable at all. **Changing anything below invalidates
 that comparison** - so if you change it, say so in
 `docs/LOCAL_SETUP.md`, and do not pretend a local run reproduces the

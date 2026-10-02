@@ -1,7 +1,7 @@
 """
 Read part 1's booklets into the shape the grader marks.
 
-    handoff/data/<booklet>/booklet.json  ->  Booklet / Part records
+    data/handoff/<booklet>/booklet.json  ->  Booklet / Part records
 
 THE CONTRACT, AND THE THREE RULES THAT MATTER
 ---------------------------------------------
@@ -35,8 +35,8 @@ path and a page reference, and any rubric item whose evidence is a
 drawing goes to the human tier holding the actual crop.
 
 Run:
-    python src/load_handoff.py --report
-    python src/load_handoff.py --booklet student_01_cie_2 --verbose
+    python marking/src/load_handoff.py --report
+    python marking/src/load_handoff.py --booklet student_01_cie_2 --verbose
 """
 
 import argparse
@@ -227,7 +227,7 @@ def report(index, booklets):
 
     unlabelled = sum(len(b.unlabelled) for b in booklets)
     print(f"{'unlabelled parts':22} {unlabelled:>8}   "
-          f"({unlabelled / parts:.0%} - these need paper alignment)")
+          f"({unlabelled / (parts or 1):.0%} - these need paper alignment)")
 
     attempted = sum(1 for b in booklets for p in b.parts if p.attempted)
     print(f"{'parts with content':22} {attempted:>8}")

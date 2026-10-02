@@ -1,9 +1,13 @@
 """
 Locate content on every prepared page: where it is, not what it is.
 
-    01_prepare/03_tone/output/  (deskewed, cropped, toned)
-        -> 03_assemble/output/geometry/   region geometry
-        -> 03_assemble/output/annotated/  the same pages with boxes drawn
+    data/pages/  (deskewed, cropped, toned)
+        -> data/geometry/             region geometry
+        -> data/geometry/annotated/   the same pages with boxes drawn
+
+build_booklet.py calls segment_page() directly, page by page, to find
+the pixels of each figure; running this file on its own is only for
+inspecting the geometry.
 
 Emits a page -> block -> line hierarchy as JSON plus flat CSVs, and a
 rendered image per page.
@@ -66,7 +70,8 @@ pieces of one thing kept arriving as several regions:
     pages, one table came out as 10 regions. See GRID_* and
     `find_grids` / `merge_grids`.
 
-Measured over 33 annotated pages by `modules/06_evaluation`, fixing
+Measured over 33 annotated pages by the since-deleted 06_evaluation
+module (see reading/docs/SEGMENT.md), fixing
 both took regions from 30.0 to 21.8 a page and fragments per
 hand-drawn region from 5.60 to 4.04 - figures 8.31 -> 3.23, maths
 6.79 -> 4.61, tables 10 -> 1 - with ink coverage unchanged at 99.8%.
@@ -79,9 +84,9 @@ signature, marks. It is not answer content, and pipelines that do not
 need identity data should not be handling it.
 
 Run:
-    python segment.py                  # every content page
-    python segment.py --limit 40       # a sample
-    python segment.py --no-images      # geometry only, much faster
+    python reading/assemble/segment.py               # every content page
+    python reading/assemble/segment.py --limit 40    # a sample
+    python reading/assemble/segment.py --no-images   # geometry only, faster
 """
 
 import argparse
@@ -89,28 +94,29 @@ import csv
 import json
 import os
 import re
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-REPO = STAGE_DIR.parent.parent
+from common import layout                                  # noqa: E402
 
 # The prepared pages, read directly rather than through a stage-local
 # junction. The junction this used to point through is the one that can
 # take the corpus with it when a stage directory is deleted.
-SOURCE_DIR = REPO / "modules" / "01_prepare" / "03_tone" / "output"
+SOURCE_DIR = layout.PAGES
 
-# Machine-readable geometry - this is what the next module consumes.
-OUT_DIR = STAGE_DIR / "output" / "geometry"
+# Machine-readable geometry, for inspection.
+OUT_DIR = layout.GEOMETRY
 
 # The same pages with the regions drawn on, for a human to page through
 # and judge. Nothing downstream reads these.
-ANNOTATED_DIR = STAGE_DIR / "output" / "annotated"
+ANNOTATED_DIR = layout.GEOMETRY / "annotated"
 
 # page_01 is the identity cover sheet.
 COVER_PAGE = 1
@@ -330,7 +336,7 @@ GRID_GROW_PITCH = 2.5
 # object", and a stroke joining them answers that locally. A diagram
 # with no straight strokes in it - a free-hand curve, a sketch - is
 # still missed, and no threshold here will catch it. That case needs a
-# learned detector; see modules/06_evaluation/README.md.
+# learned detector; see reading/docs/SEGMENT.md section 4.
 #
 # Lines separated by more than this belong to different blocks.
 BLOCK_GAP_PITCH = 1.6

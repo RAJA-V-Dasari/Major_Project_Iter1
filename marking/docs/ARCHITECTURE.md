@@ -7,12 +7,14 @@ the way it is.
 
 ## 1. What the thing actually is
 
-This is **part 2 of a two-part project**. Part 1 (`Major_Project_Iter1`)
-read 50 handwritten Computer Networks booklets into structured
-`question → part → answer` data using a vision model. This half takes
-that output and marks it against the department's official answer
-schemes, then measures the result against the marks a faculty member
-actually awarded.
+This is **the second half of a two-part pipeline**. Part 1 (`reading/`
+in this repo) reads handwritten Computer Networks booklets into
+structured `question → part → answer` data using a vision model, and
+hands them over as a contract ([`../../docs/HANDOFF.md`](../../docs/HANDOFF.md)).
+This half takes that output and marks it against the department's
+official answer schemes, then measures the result against the marks a
+faculty member actually awarded. The numbers below are from the
+September handoff of 50 booklets.
 
 The whole problem, in numbers:
 
@@ -30,21 +32,23 @@ about whether one student made one specific claim, and the entire design
 follows from the fact that most of them cannot be made reliably by the
 same mechanism.
 
-### It pays for no inference, and in this edition makes no network call
+### It pays for no inference
 
-Everything runs on one machine, including the model tier — Qwen2.5
-served locally by Ollama or llama.cpp. There is no training, no
-fine-tuning, no API key and no paid GPU anywhere in the path.
+There is no training, no fine-tuning, no API key and no paid GPU
+anywhere in the path. The model tier is a queue on disk with three
+routes: a free Colab T4 (a generated notebook), this machine (Qwen2.5
+through Ollama or llama.cpp, which makes no network call at all), or
+Claude reading the queue in a Claude Code session.
 
-`pyproject.toml` enforces the split: the base install is `pymupdf`,
-`pillow` and `numpy`, and the embedding model is an optional extra. The
-model tier adds **nothing** to it — the default backend is reached over
-HTTP with `urllib` from the standard library, so the model lives in
-Ollama's own store rather than in `site-packages`.
+`pyproject.toml` enforces the split: the base install has no ML stack,
+and the embedding model is an optional extra. The local model tier adds
+**nothing** to it. Its default backend is reached over HTTP with
+`urllib` from the standard library, so the model lives in Ollama's own
+store rather than in `site-packages`.
 
-The trade is hardware, not money. Without an NVIDIA GPU the tier runs on
-CPU, and 740 items is tens of hours rather than the two or three a T4
-takes. See [`LOCAL_SETUP.md`](LOCAL_SETUP.md).
+On the local route the trade is hardware, not money. Without an NVIDIA
+GPU the tier runs on CPU, and 740 items take tens of hours rather than
+the two or three a T4 takes. See [`LOCAL_SETUP.md`](LOCAL_SETUP.md).
 
 ---
 
@@ -291,14 +295,15 @@ everything agrees with anything. The honest comparison is the one after.
         keys/cie*.json ──┐
    (hand-authored rubric)│
                          │
-   handoff (part 1) ─────┼──> grade.py ──> output/marks/*.json
-   187 MB, referenced    │        │        output/summary.csv
-   in place, never copied│        │        output/queue_llm.jsonl
-                         │        │        output/queue_human.jsonl
-   output/alignment.json─┘        │
+   data/handoff/ ────────┼──> grade.py ──> data/marking/marks/*.json
+   (part 1's booklets)   │        │        data/marking/summary.csv
+                         │        │        data/marking/queue_llm.jsonl
+                         │        │        data/marking/queue_human.jsonl
+   alignment.json ───────┘        │
    (resolved odd labels)          │
                                   ├──> llm_local.py ──> local Qwen2.5
-                                  │    (or make_llm_notebook.py ──> Colab)
+                                  │    (or make_llm_notebook.py ──> Colab,
+                                  │     or claude_tier.py ──> in session)
                                   │         verdicts.jsonl ──┐
                                   │                          │
                                   │    apply_verdicts.py <───┘
@@ -320,7 +325,7 @@ everything agrees with anything. The honest comparison is the one after.
 
 | file | LOC | role |
 |---|---|---|
-| `paths.py` | 59 | Every path in one place. The handoff is referenced in place, never copied; `MPE_HANDOFF` / `MPE_SCHEMES` override. |
+| `paths.py` | 59 | Every path in one place, resolved through the repo's data layout (`common/layout.py`): the handoff under `data/handoff/`, every output under `data/marking/`. `MPE_HANDOFF` / `MPE_SCHEMES` override. |
 | `render_scheme.py` | 130 | Scheme PDFs → PNG at 200 dpi. The PDFs contain **zero font objects** — phone scans, no text layer, nothing to parse. |
 | `validate_keys.py` | 276 | The rubric checked against itself: items sum to the question, questions sum to the paper, `choice_with` reciprocated, `exact` values audited for distinctiveness. |
 | `make_verify_sheet.py` | 194 | Generates `keys/VERIFY.md`, the human sign-off. `validate_keys` proves the arithmetic; this proves the judgement. |
@@ -386,10 +391,12 @@ the decision logic, and the two copies would drift on the first change —
 leaving a "calibrated" number that describes code nobody runs.
 
 **Every stage carries its own check**, and the stages are ordered so a
-failure surfaces before it contaminates the next one. There is no test
-suite; `--report`, `--check` and `--dry-run` are the verification.
+failure surfaces before it contaminates the next one. `--report`,
+`--check` and `--dry-run` are the verification; `tests/` at the repo
+root runs the handoff-to-marking path end to end on synthetic data, and
+`python pipeline.py check` runs all of it.
 
-**Nothing derived from a booklet is committable.** All of `output/` is
+**Nothing derived from a booklet is committable.** All of `data/marking/` is
 gitignored, because every file this project writes quotes a student to
 justify itself. The single exception is `gold/gold_marks.csv` —
 pseudonymous integers, no names or handwriting, and the one artifact

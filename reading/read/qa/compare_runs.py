@@ -5,21 +5,25 @@ better and the pages that already worked did not get worse. Aggregate
 counts hide both halves: a run can fix nine loops, break two controls,
 and still look like an improvement.
 
-Reads `upload/TEST_BATCH.csv` for what each page is supposed to
-demonstrate, then reports the signals that decide it.
+Reads `data/read/batches/TEST_BATCH.csv` for what each page is supposed
+to demonstrate, then reports the signals that decide it.
 
-    python modules/02_read/src/compare_runs.py \\
-        --before modules/02_read/output/batch00 \\
-        --after  modules/02_read/output/batchtest
+    python reading/read/qa/compare_runs.py \\
+        --before data/read/batch00 \\
+        --after  data/read/batchtest
 """
 import argparse, collections, csv, io, pathlib, re, sys
+
+sys.path.insert(0, str(next(p for p in pathlib.Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
+from common import layout                                  # noqa: E402
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
                               errors="replace")
 
 MARK_NEW = re.compile(r"!\[(diagram|table):\s*[^\]]*\]")
 MARK_OLD = re.compile(r"!\[[^\]]*\]\([^)]*\)")
-CASES = pathlib.Path("modules/02_read/upload/TEST_BATCH.csv")
+CASES = layout.BATCHES / "TEST_BATCH.csv"
 
 
 def signals(body):

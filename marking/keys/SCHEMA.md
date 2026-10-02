@@ -1,7 +1,7 @@
 # The rubric schema
 
 One file per CIE: `cie1.json`, `cie2.json`, `cie3.json`. Hand-authored
-by reading `scheme_pages/`, because the scheme PDFs carry **zero font
+by reading the renders in `data/schemes/pages/`, because the scheme PDFs carry **zero font
 objects** — they are phone scans of a printed document and there is no
 text layer to parse. `render_scheme.py --check` prints that font count;
 it is the evidence behind doing this by hand.

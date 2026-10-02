@@ -1,7 +1,7 @@
 """
 The human tier's working tool: one booklet at a time, with the drawings.
 
-    output/marks/*.json + the handoff's crops  ->  http://127.0.0.1:8000
+    data/marking/marks/*.json + the handoff's crops  ->  http://127.0.0.1:8000
 
 WHY A BOOKLET AND NOT A QUESTION
 --------------------------------
@@ -31,11 +31,11 @@ override is logged with the tier it displaced.
 
 THE MARKS FILES ARE THE ONLY STATE
 ----------------------------------
-There is no queue file. `output/queue_human.jsonl` was written before the
+There is no queue file. `data/marking/queue_human.jsonl` was written before the
 model ran and has been wrong ever since. A second copy of the truth is a
-second thing to get stale, so this reads `output/marks/*.json` directly.
+second thing to get stale, so this reads `data/marking/marks/*.json` directly.
 
-Every decision is appended to `output/human_marks.jsonl` before the marks
+Every decision is appended to `data/marking/human_marks.jsonl` before the marks
 file is touched. That log is what makes the pipeline replayable: a re-run
 of grade.py wipes the marks back to the ladder's own verdicts, and
 without the log a day of human work would go with it.
@@ -58,9 +58,9 @@ WHAT IT WILL NOT DO
     loaded ourselves, so there is no filename to traverse with
 
 Run:
-    python src/serve.py
-    python src/serve.py --port 8800
-    python src/serve.py --check      # no socket, just prove the data is there
+    python marking/src/serve.py
+    python marking/src/serve.py --port 8800
+    python marking/src/serve.py --check      # no socket, just prove the data is there
 """
 
 import argparse
@@ -633,7 +633,7 @@ def export_csv(booklets, per_question):
     """The marks as they stand right now, for a spreadsheet.
 
     Built from the marks files on each request, so it includes every
-    decision saved in this tool - unlike output/summary.csv, which only
+    decision saved in this tool - unlike data/marking/summary.csv, which only
     changes when the pipeline is re-run.
     """
 
@@ -828,11 +828,11 @@ def main():
     args = parser.parse_args()
 
     if not paths.MARKS_DIR.exists():
-        raise SystemExit("no marks yet - run: python src/grade.py --all")
+        raise SystemExit("no marks yet - run: python marking/src/grade.py --all")
 
     booklets = build_booklets()
     if not booklets:
-        raise SystemExit("no marks found in output/marks/")
+        raise SystemExit("no marks found in data/marking/marks/")
 
     if args.check:
         raise SystemExit(check(booklets))

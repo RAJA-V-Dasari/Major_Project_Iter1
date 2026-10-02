@@ -1,12 +1,16 @@
 """
-Publish a pipeline stage's output as the cleaned Hugging Face dataset.
+Publish the prepared pages as the cleaned Hugging Face dataset.
 
-    preprocessing/<stage>/output/  ->  prss-majorproject-37/cleaned-handwritten-answerscripts
+    data/pages/  ->  prss-majorproject-37/cleaned-handwritten-answerscripts
 
-One script rather than a copy per stage: the publishable stage moves
-as the pipeline grows (crop -> tone -> de-rule -> ...), and per-stage
-copies would drift. `--stage` selects which one to publish; the
-default is the current end of the pipeline.
+One script rather than a copy per stage: the publishable stage has moved
+as the preparation grew (crop -> tone -> ...), and per-stage copies would
+drift. `--stage` selects which one to publish; the default is the end of
+`prepare`, the folder every later stage reads.
+
+    pages      data/pages/                  (default: the toned pages)
+    02_crop    data/prepare/02_crop/
+    01_deskew  data/prepare/01_deskew/
 
 The raw scans live in a SEPARATE repo
 (prss-majorproject-37/Handwritten-AnswerScripts-MajorProject) and are
@@ -22,51 +26,52 @@ Always PRIVATE - cover pages carry real names, USNs, signatures and
 marks.
 
 Run:
-    python publish_dataset.py --dry-run
-    python publish_dataset.py                  # publish default stage
-    python publish_dataset.py --stage 02_crop  # publish an earlier one
+    python scripts/publish_dataset.py --dry-run
+    python scripts/publish_dataset.py                  # publish data/pages
+    python scripts/publish_dataset.py --stage 02_crop  # an earlier one
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-from huggingface_hub import HfApi
+sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
 
+from common import layout                                  # noqa: E402
 
 REPO_ID = "prss-majorproject-37/cleaned-handwritten-answerscripts"
 REPO_TYPE = "dataset"
 
-PREP_DIR = Path(__file__).resolve().parent
-REPO_ROOT = PREP_DIR.parent.parent   # modules/01_prepare/ -> repo root
+STAGES = {
+    "pages": layout.PAGES,
+    "02_crop": layout.PREPARE / "02_crop",
+    "01_deskew": layout.PREPARE / "01_deskew",
+}
 
-# The end of the pipeline as it stands.
-DEFAULT_STAGE = "03_tone"
+# The dataset card is tracked in git; the copy inside the published
+# folder is generated from it at upload time, so the published card and
+# the tracked one cannot drift.
+README_PATH = layout.REPO / "reading" / "docs" / "DATASET_CARD.md"
 
-# The dataset card is tracked in git at the repo root; the copy inside
-# the stage's output/ is generated from it at upload time, so the
-# published card and the tracked one cannot drift.
-README_PATH = REPO_ROOT / "DATASET.md"
-
-# Working/diagnostic files that live under a stage's output/ but are
-# not part of the dataset.
-IGNORE_PATTERNS = ["measurements.json", "angles.json"]
+# Working/diagnostic files that live in a stage's folder but are not part
+# of the dataset.
+IGNORE_PATTERNS = ["measurements.json", "angles.json", ".cache/**"]
 
 
 def main():
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default=DEFAULT_STAGE)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    parser.add_argument("--stage", default="pages", choices=sorted(STAGES))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    token = os.environ.get("HF_TOKEN")
+    token = layout.hf_token()
 
     if not token:
-        sys.exit("HF_TOKEN not set. Run:  set -a; . ./.env; set +a")
+        sys.exit("HF_TOKEN not set - put it in .env at the repo root")
 
-    output_dir = PREP_DIR / args.stage / "output"
+    output_dir = STAGES[args.stage]
 
     if not output_dir.exists():
         sys.exit(f"{output_dir} not found - run the {args.stage} stage first")
@@ -82,7 +87,7 @@ def main():
     students = len({p.parents[1].name for p in pages})
     size = sum(p.stat().st_size for p in pages) / 1e9
 
-    print(f"Stage    : {args.stage}")
+    print(f"Stage    : {args.stage}  ({output_dir})")
     print(f"Pages    : {len(pages)}")
     print(f"Students : {students}")
     print(f"Size     : {size:.2f} GB")
@@ -92,6 +97,8 @@ def main():
         print("\nDry run - nothing was changed.")
         return
 
+    from huggingface_hub import HfApi
+
     api = HfApi(token=token)
 
     print("\nCreating repo if it doesn't exist ...")
@@ -100,7 +107,8 @@ def main():
         REPO_ID, repo_type=REPO_TYPE, private=True, exist_ok=True
     )
 
-    (output_dir / "README.md").write_text(README_PATH.read_text())
+    (output_dir / "README.md").write_text(
+        README_PATH.read_text(encoding="utf-8"), encoding="utf-8")
 
     print("Uploading ...")
 

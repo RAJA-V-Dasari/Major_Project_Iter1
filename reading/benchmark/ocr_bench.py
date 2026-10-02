@@ -1,10 +1,13 @@
 """
 Score any OCR engine against hand-transcribed pages.
 
-    04_evaluate/bench_pages.json      which pages, and why those
-    04_evaluate/ground_truth/*.md     what is actually written on them
-    04_evaluate/predictions/<engine>/*.md
+    reading/benchmark/bench_pages.json   which pages, and why those
+    data/benchmark/ground_truth/*.md     what is actually written on them
+    data/read/<engine>/*.md              what the reader made of them
         -> CER / WER per page, per difficulty bucket, and overall
+
+The ground truth is a hand transcription of students' answers, so it
+lives under data/ with every other copy of their words, never in git.
 
 This is `plan.md` section 6 step 2, and it exists to settle one
 question with a number instead of an argument: is reading a whole page
@@ -34,9 +37,9 @@ IS good for is a separate count - did the engine notice something was
 there - reported alongside but never mixed into the character score.
 
 Run:
-    python ocr_bench.py --engine trocr_lines
-    python ocr_bench.py --engine vlm_page --verbose
-    python ocr_bench.py --list            # what is transcribed so far
+    python reading/benchmark/ocr_bench.py --engine qwen7b --verbose
+    python reading/benchmark/ocr_bench.py --engine trocr_lines
+    python reading/benchmark/ocr_bench.py --list     # transcribed so far
 """
 
 import argparse
@@ -47,11 +50,15 @@ import unicodedata
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
 
-PAGES = STAGE_DIR / "bench_pages.json"
-TRUTH_DIR = STAGE_DIR / "ground_truth"
-PRED_DIR = STAGE_DIR / "predictions"
+sys.path.insert(0, str(next(p for p in SRC_DIR.parents
+                            if (p / "common" / "layout.py").exists())))
+
+from common import layout                                  # noqa: E402
+
+PAGES = SRC_DIR / "bench_pages.json"
+TRUTH_DIR = layout.BENCHMARK / "ground_truth"
+PRED_DIR = layout.READ
 
 # A ground-truth line that stands in for a drawing rather than text.
 DIAGRAM_LINE = re.compile(r"^\s*!\[.*?\]|^\s*<!--\s*(diagram|edges)", re.I)
@@ -221,7 +228,7 @@ def main():
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--truth", type=Path,
                         help="directory of hand transcriptions "
-                             "(default: 04_evaluate/ground_truth)")
+                             "(default: data/benchmark/ground_truth)")
     args = parser.parse_args()
 
     # Transcribing is slow handwork, so where the files live is the

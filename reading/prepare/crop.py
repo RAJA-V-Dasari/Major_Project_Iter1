@@ -1,7 +1,8 @@
 """
 Crop every page to one fixed booklet-sheet size.
 
-    02_crop/input/  (deskewed, variable scanner lip)  ->  02_crop/output/
+    data/prepare/01_deskew/  (deskewed, variable scanner lip)
+        ->  data/prepare/02_crop/
 
 The physical page is the same size on every scan; what varies is a
 per-scan shadow/margin (mostly on the left, from the booklet binding)
@@ -16,28 +17,24 @@ Edge detection (paper_bbox / booklet_bottom) is the same logic as
 measure.py - see there for how it was validated.
 
 Run:
-    python crop.py --preview        # a few pages, crop box overlaid
-    python crop.py                  # crop everything
+    python reading/prepare/crop.py --preview   # a few pages, crop box overlaid
+    python reading/prepare/crop.py             # crop everything
 """
 
 import argparse
 import os
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import cv2
 import numpy as np
 
 from measure import (
-    SOURCE_DIR, paper_bbox, page_list,
+    SOURCE_DIR, layout, paper_bbox, page_list,
 )
 
 
-SRC_DIR = Path(__file__).resolve().parent
-STAGE_DIR = SRC_DIR.parent
-
-OUT_DIR = STAGE_DIR / "output"
-PREVIEW_DIR = STAGE_DIR / "preview"
+OUT_DIR = layout.PREPARE / "02_crop"
+PREVIEW_DIR = layout.PREPARE / "preview" / "02_crop"
 
 # Every booklet is bound (stapled/sewn) a short distance in from the
 # true physical left edge - visible as a column of small perforation

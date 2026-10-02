@@ -13,7 +13,7 @@ above and the reader was generating text the page does not support.
 
 Writes a TSV of every page plus a summary of the outliers.
 
-    python modules/02_read/src/audit_pages.py modules/02_read/output/batch00
+    python reading/read/qa/audit_pages.py data/read/qwen7b
 """
 import argparse, collections, io, pathlib, re, statistics, sys
 
@@ -24,7 +24,11 @@ from PIL import Image
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
                               errors="replace")
 
-PAGES = pathlib.Path("modules/01_prepare/03_tone/output")
+sys.path.insert(0, str(next(p for p in pathlib.Path(__file__).resolve().parents
+                            if (p / "common" / "layout.py").exists())))
+from common import layout                                  # noqa: E402
+
+PAGES = layout.PAGES
 STEM = re.compile(r"^s(\d+)_c(\d+)_p(\d+)$")
 
 INK_LEVEL = 160         # cleaned pages are near-white; this is generous

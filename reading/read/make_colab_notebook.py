@@ -5,14 +5,19 @@ Written as a generator rather than a checked-in .ipynb because the
 prompt is the important part of that notebook and it is easier to
 review, diff and re-tune here than inside notebook JSON.
 
-    python make_colab_notebook.py
-        -> 02_read/read_pages_colab.ipynb
+    python reading/read/make_colab_notebook.py
+        -> reading/read/read_pages_colab.ipynb
+    python reading/read/make_colab_notebook.py --check   # compile, compare
+
+The prompt lives here and only here. read_pages.py and kaggle_run.py
+import it, so every route to a GPU reads with the same words.
 """
 
 import json
+import sys
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / "read_pages_colab.ipynb"
+OUT = Path(__file__).resolve().parent / "read_pages_colab.ipynb"
 
 # The prompt is the whole experiment. Two clauses in it are doing the
 # real work, and both come from what the incumbent got wrong:
@@ -196,7 +201,7 @@ CELLS = [
 # Reading answer scripts with a VLM
 
 Produces one Markdown file per input image, named identically, ready to
-score with `modules/04_evaluate/src/ocr_bench.py`.
+score with `reading/benchmark/ocr_bench.py` and to assemble into booklets.
 
 **Before uploading:** cover pages (`page_01`) carry names, USNs and
 marks. They are excluded by prepare_corpus_batches.py, and checked again below.
@@ -251,7 +256,7 @@ it has known recorded behaviour: 21 that broke on the last run and 9
 controls that came back correct and must still come back correct. Set
 `SOURCE = 'upload'`, or put it in the Drive folder and set
 `BATCH = 'batch_test.zip'`. Check sections 6b, 7 and 8 against
-`upload/TEST_BATCH.csv` before spending hours on the full corpus.
+`data/read/batches/TEST_BATCH.csv` before spending hours on the full corpus.
 """),
     code("""
 import zipfile, pathlib, subprocess, sys
@@ -479,7 +484,7 @@ back onto their pages only one enclosed its figure; one boxed prose and
 missed the diagram entirely. What the reader does get right is the
 reading ORDER: the marker lands where the figure belongs in the answer.
 So position in the output locates the figure, and
-`modules/03_assemble/src/segment.py` supplies the pixels.
+`reading/assemble/segment.py` supplies the pixels.
 
 A page that still OOMs is retried once at half the patch budget rather
 than being lost, and the message says so - a page silently written as
@@ -494,10 +499,10 @@ from qwen_vl_utils import process_vision_info
 OUT = OUT_ROOT / ENGINE; OUT.mkdir(parents=True, exist_ok=True)
 
 # A marker carries a description, never coordinates. Where a figure
-# sits on the page is measured by modules/03_assemble/src/segment.py,
+# sits on the page is measured by reading/assemble/segment.py,
 # which is precise about geometry; asking the model for pixels produced
 # round numbers in its own resized space that mostly missed the figure.
-MARK = re.compile(r'!\[(diagram|table):\s*([^\]]*)\]')
+MARK = re.compile(r'!\\[(diagram|table):\\s*([^\\]]*)\\]')
 
 def read(path, max_patches=MAX_PATCHES, penalty=1.0):
     image = Image.open(path).convert('RGB')
@@ -683,8 +688,8 @@ for f in sorted(OUT.glob('*.md')):
     # bare ![diagram], a coordinate tuple, an invented URL. All
     # three appeared in the previous run, and each one is a figure
     # the pipeline cannot place.
-    unboxed += len(re.findall(r'!\[[^\]]*\]\(', body))
-    unboxed += len(re.findall(r'!\[(?:diagram|table)\](?!:)', body))
+    unboxed += len(re.findall(r'!\\[[^\\]]*\\]\\(', body))
+    unboxed += len(re.findall(r'!\\[(?:diagram|table)\\](?!:)', body))
 
 marks['MALFORMED markers'] = unboxed
 
@@ -765,15 +770,17 @@ if not shown:
     md("""
 ## 9. Download
 
-Unzip into `modules/04_evaluate/predictions/<ENGINE>/`, then locally:
+Unzip into `data/read/<ENGINE>/` in the repo (one `.md` per page), then
+locally:
 
 ```
-python modules/04_evaluate/src/ocr_bench.py --engine qwen7b --verbose
-python modules/04_evaluate/src/ocr_bench.py --engine qwen3b --verbose   # the old run
+python pipeline.py read --engine qwen7b              # coverage: what is read, what is not
+python reading/benchmark/ocr_bench.py --engine qwen7b --verbose
+python pipeline.py run --engine qwen7b               # assemble -> handoff -> mark
 ```
 
-Same pages, same scorer, so the three engines line up directly against
-the 0.573 baseline.
+Same pages, same scorer, so engines line up directly against the 0.573
+baseline.
 """),
     code("""
 import shutil
@@ -852,6 +859,19 @@ def main():
 
     if broken:
         raise SystemExit(f"\n{broken} cell(s) will not compile - not written.")
+
+    # --check: compile, and confirm the committed notebook is what this
+    # generator would write. An edited prompt that was never regenerated
+    # is a notebook reading pages with a prompt nobody reviewed.
+    if "--check" in sys.argv[1:]:
+        current = (json.loads(OUT.read_text(encoding="utf-8"))
+                   if OUT.exists() else None)
+        if current != json.loads(json.dumps(notebook)):
+            raise SystemExit(f"{OUT.name} is out of date - regenerate it: "
+                             "python reading/read/make_colab_notebook.py")
+        print(f"{len(CELLS)} cells, all code cells compile, "
+              f"{OUT.name} is current")
+        return 0
 
     OUT.write_text(json.dumps(notebook, indent=1), encoding="utf-8")
 

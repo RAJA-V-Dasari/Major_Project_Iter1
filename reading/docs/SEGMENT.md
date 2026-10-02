@@ -1,40 +1,40 @@
-> **Restored from `33513b7`** (the commit that fixed over-fragmentation),
-> deleted in `7c8c2c0` when whole-page reading replaced the line pipeline.
-> Brought back because the batch00 review showed the reader's figure
-> boxes are guesses: it knows a figure exists and where it belongs in
-> the reading order, but not where it is in pixels. This module is the
-> other half - it is precise about geometry and says nothing about what
-> a region is. Paths below are updated; the measurements are as recorded.
+> **What this is now.** `reading/assemble/segment.py` was the `02_segment`
+> stage of the line pipeline. It was deleted in `7c8c2c0`, when reading
+> whole pages replaced that pipeline, and restored from `33513b7` (the
+> commit that fixed over-fragmentation). It came back because the batch00
+> review showed that the reader's figure boxes are guesses: the reader
+> knows a figure exists and where it belongs in the reading order, but
+> not where it is in pixels. Its only job today is the pixels.
+> `build_booklet.py` calls `segment_page()` on each page to find drawn
+> regions to crop. Nothing reads its standalone output.
+>
+> The stages named below (`crop_lines.py`, `03_router`, `04_ocr`,
+> `06_evaluation`) belonged to the deleted line pipeline and are in git
+> history only. The measurements are as recorded at the time.
 
-# 02_segment
+# segment.py: where the content is
 
-Finds where the content is on every prepared page, and cuts each region
-out as its own image. **Geometry only — no labels, deliberately.**
+Finds where the content is on every prepared page. **Geometry only, no
+labels, deliberately.**
 
 ```
-01_prepare/03_tone/output/ -> ../01_prepare/03_tone/output
+data/pages/
     |
     |  segment.py      page -> block -> line hierarchy
     v
-output/segmentation.json, pages.csv, blocks.csv, lines.csv
-annotated/            the same pages with boxes drawn, for a human
-    |
-    |  crop_lines.py   one PNG per region
-    v
-crops/ + crops/manifest.csv     consumed by 03_router and 04_ocr
+data/geometry/segmentation.json, pages.csv, blocks.csv, lines.csv
+data/geometry/annotated/        the same pages with boxes drawn, for a human
 ```
 
 ```bash
-cd modules/03_assemble/src
-python segment.py                  # every content page
-python segment.py --limit 40       # a sample
-python segment.py --no-images      # geometry only, much faster
-python crop_lines.py               # cut the regions out
+python reading/assemble/segment.py                  # every content page
+python reading/assemble/segment.py --limit 40       # a sample
+python reading/assemble/segment.py --no-images      # geometry only, faster
 ```
 
-The `src/*.py` module docstrings carry the reasoning for every threshold
-and are the place to look before changing one. This file is the stage-level
-view: what it produces, how good it is, and what it refuses to do.
+The module docstring carries the reasoning for every threshold and is the
+place to look before changing one. This file is the stage-level view: what
+it produces, how good it is, and what it refuses to do.
 
 ---
 

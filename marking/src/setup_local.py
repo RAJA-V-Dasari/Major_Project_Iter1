@@ -2,8 +2,8 @@ r"""
 Check whether this machine can actually run the model tier, and how long
 it would take.
 
-    python src/setup_local.py            # inspect the machine, decide
-    python src/setup_local.py --time-it  # mark one real item, extrapolate
+    python marking/src/setup_local.py            # inspect the machine, decide
+    python marking/src/setup_local.py --time-it  # mark one real item, extrapolate
 
 WHY THIS EXISTS
 ---------------
@@ -204,7 +204,7 @@ def report_queue():
     queue = paths.OUT_DIR / "queue_llm.jsonl"
     if not queue.exists():
         print(f"  {queue} does not exist yet")
-        print("  run:  python src/grade.py --all")
+        print("  run:  python marking/src/grade.py --all")
         return None, 0
 
     records = [json.loads(line) for line in open(queue, encoding="utf-8")
@@ -286,8 +286,8 @@ def main():
         time_one(args, remaining or [])
     else:
         print("\nNext:")
-        print("  python src/setup_local.py --time-it     # measure, do not guess")
-        print(f"  python src/llm_local.py --limit 25       # a sample of {count}")
+        print("  python marking/src/setup_local.py --time-it     # measure, do not guess")
+        print(f"  python marking/src/llm_local.py --limit 25       # a sample of {count}")
 
     print("\nFull setup, including what a smaller model costs you: "
           "docs/LOCAL_SETUP.md")

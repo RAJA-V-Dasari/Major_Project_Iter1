@@ -13,7 +13,7 @@ and sometimes the answer will be us.
 The directory is still called `gold/` because renaming it is churn, but
 treat the name as a filename, not a claim.
 
-Read by: Claude, in session, from `gold/covers/*.png`
+Read by: Claude, in session, from `data/marking/covers/*.png`
 Checked by: `src/gold_check.py`
 Status: **45 of 50 reconcile, 4 documented, 1 excluded — 49 usable**
 

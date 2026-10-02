@@ -1,7 +1,7 @@
 """
 Generate the Colab notebook that runs the model tier.
 
-    output/queue_llm.jsonl  ->  notebooks/grade_llm.ipynb
+    data/marking/queue_llm.jsonl  ->  marking/notebooks/grade_llm.ipynb
                             ->  (on Colab) verdicts.jsonl
 
 WHY A NOTEBOOK AND NOT AN API CALL
@@ -48,8 +48,8 @@ against the student's own preceding values rather than against the
 scheme's absolutes.
 
 Run:
-    python src/make_llm_notebook.py
-    python src/make_llm_notebook.py --check     # compile the cells only
+    python marking/src/make_llm_notebook.py
+    python marking/src/make_llm_notebook.py --check     # compile the cells only
 """
 
 import argparse
@@ -109,7 +109,7 @@ print(torch.cuda.get_device_name(0))
 
     upload = '''\
 # --- the queue ------------------------------------------------------
-# Upload output/queue_llm.jsonl from the repo.
+# Upload data/marking/queue_llm.jsonl from the repo.
 from google.colab import files
 uploaded = files.upload()
 QUEUE = list(uploaded)[0]
@@ -215,7 +215,7 @@ print("awards with an empty quote (these WILL be rejected):",
 
 files.download(OUT)
 # Then, in the repo:
-#     python src/apply_verdicts.py verdicts.jsonl
+#     python marking/src/apply_verdicts.py verdicts.jsonl
 '''
 
     markdown = f'''\
